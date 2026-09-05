@@ -30,7 +30,7 @@ export default function CategoriesPage() {
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [formData, setFormData] = useState<CategoryFormData>({ name: '', description: '', parentId: '' });
-  const [attrData, setAttrData] = useState<AttrFormData>({ name: '', type: 'SELECT', unit: '', options: [], required: true });
+  const [attrData, setAttrData] = useState<AttrFormData>({ name: '', type: 'select', unit: '', options: [], required: true });
   const [editingAttr, setEditingAttr] = useState<{ attr: { id: number; name: string; type: string; unit: string | null; options: string[]; required: boolean }; categoryId: number } | null>(null);
   const [optionInput, setOptionInput] = useState('');
   const optionInputRef = useRef<HTMLInputElement>(null);
@@ -189,7 +189,7 @@ export default function CategoriesPage() {
   const openCreateAttrModal = (cat: Category) => {
     setSelectedCategory(cat);
     setEditingAttr(null);
-    setAttrData({ name: '', type: 'SELECT', unit: '', options: [], required: true });
+    setAttrData({ name: '', type: 'select', unit: '', options: [], required: true });
     setOptionInput('');
     setAttrError('');
     setShowAttrModal(true);
@@ -200,9 +200,9 @@ export default function CategoriesPage() {
     setEditingAttr({ attr, categoryId: cat.id });
     setAttrData({
       name: attr.name,
-      type: attr.type,
+      type: attr.type.toLowerCase(),
       unit: attr.unit ?? '',
-      options: attr.options,
+      options: Array.isArray(attr.options) ? attr.options : [],
       required: attr.required,
     });
     setOptionInput('');
@@ -249,7 +249,7 @@ export default function CategoriesPage() {
     try {
       const payload = {
         name: attrData.name,
-        type: attrData.type,
+        type: attrData.type.toLowerCase(),
         unit: attrData.unit || undefined,
         options: finalOptions,
         required: attrData.required,
@@ -261,7 +261,7 @@ export default function CategoriesPage() {
       }
       setShowAttrModal(false);
       setEditingAttr(null);
-      setAttrData({ name: '', type: 'SELECT', unit: '', options: [], required: true });
+      setAttrData({ name: '', type: 'select', unit: '', options: [], required: true });
       setOptionInput('');
       loadCategories();
     } catch (err) {
@@ -366,11 +366,12 @@ export default function CategoriesPage() {
                     <div className="space-y-1">
                       {cat.attributes.map((attr, i) => {
                         const isLast = i === cat.attributes.length - 1;
+                        const options = Array.isArray(attr.options) ? attr.options : [];
                         const typeColor: Record<string, string> = {
-                          SELECT: 'bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-300',
-                          TEXT: 'bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-300',
-                          NUMBER: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-300',
-                          BOOLEAN: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300',
+                          select: 'bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-300',
+                          text: 'bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-300',
+                          number: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-300',
+                          boolean: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300',
                         };
                         return (
                           <div key={attr.id} className="relative flex items-center pl-9">
@@ -381,12 +382,12 @@ export default function CategoriesPage() {
                               <div className="flex items-center gap-1.5 min-w-0">
                                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">{attr.name}</span>
                                 {attr.required && <span className="text-rose-400 text-[11px] leading-none shrink-0">*</span>}
-                                <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-md font-semibold uppercase tracking-wide ${typeColor[attr.type] ?? 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>{attr.type}</span>
+                                <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-md font-semibold uppercase tracking-wide ${typeColor[attr.type.toLowerCase()] ?? 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>{attr.type}</span>
                                 {attr.unit && <span className="text-[10px] text-slate-400 dark:text-slate-500 shrink-0">{attr.unit}</span>}
                               </div>
                               <div className="flex items-center gap-2 shrink-0">
-                                {attr.options.length > 0 && (
-                                  <span className="hidden sm:block text-[10px] text-slate-400 dark:text-slate-500 max-w-22.5 truncate">{attr.options.join(' · ')}</span>
+                                {options.length > 0 && (
+                                  <span className="hidden sm:block text-[10px] text-slate-400 dark:text-slate-500 max-w-22.5 truncate">{options.join(' · ')}</span>
                                 )}
                                 <button
                                   onClick={() => openEditAttrModal(cat, attr)}
@@ -715,10 +716,12 @@ export default function CategoriesPage() {
                   onChange={(e) => setAttrData({ ...attrData, type: e.target.value })}
                   className="w-full rounded-2xl border border-slate-200 dark:border-slate-600 bg-slate-50/70 dark:bg-slate-700/50 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-sky-400 dark:focus:border-sky-500 focus:bg-white dark:focus:bg-slate-700 focus:ring-4 focus:ring-sky-100 dark:focus:ring-sky-900/50"
                 >
-                  <option value="SELECT">Select</option>
-                  <option value="TEXT">Text</option>
-                  <option value="NUMBER">Number</option>
-                  <option value="BOOLEAN">Boolean</option>
+                  <option value="select">Select</option>
+                  <option value="text">Text</option>
+                  <option value="number">Number</option>
+                  <option value="boolean">Boolean</option>
+                  <option value="multi_select">Multi-select</option>
+                  <option value="date">Date</option>
                 </select>
               </div>
               <div>

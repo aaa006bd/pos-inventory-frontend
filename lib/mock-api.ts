@@ -1,6 +1,6 @@
 'use client';
 
-import { Category, Attribute, Product, User } from './api';
+import { Category, Attribute, Product } from './api';
 
 let categories: Category[] = [
   {

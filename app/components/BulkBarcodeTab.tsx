@@ -72,7 +72,8 @@ export default function BulkBarcodeTab({ showMessage }: BulkBarcodeTabProps) {
   const toggleLotExpand = (lotId: number) => {
     setExpandedLots(prev => {
       const next = new Set(prev);
-      next.has(lotId) ? next.delete(lotId) : next.add(lotId);
+      if (next.has(lotId)) next.delete(lotId);
+      else next.add(lotId);
       return next;
     });
   };
@@ -100,7 +101,8 @@ export default function BulkBarcodeTab({ showMessage }: BulkBarcodeTabProps) {
   const toggleBarcode = useCallback((barcode: string) => {
     setSelected(prev => {
       const next = new Set(prev);
-      next.has(barcode) ? next.delete(barcode) : next.add(barcode);
+      if (next.has(barcode)) next.delete(barcode);
+      else next.add(barcode);
       return next;
     });
   }, []);

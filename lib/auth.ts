@@ -1,4 +1,4 @@
-import { db, User, Tenant } from './db';
+import { User, Tenant } from './db';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'inventory-secret-key-2024';
 

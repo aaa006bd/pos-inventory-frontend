@@ -1,14 +1,11 @@
 {
   "name": "Next.js Inventory Management",
   "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
-  "features": {
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
-  },
-  "forwardPorts": [3000],
+  "appPort": ["3020:3000"],
   "portsAttributes": {
     "3000": {
       "label": "Application",
-      "onAutoForward": "notify"
+      "onAutoForward": "ignore"
     }
   },
   "postCreateCommand": "npm install",
@@ -18,7 +15,8 @@
         "dbaeumer.vscode-eslint",
         "esbenp.prettier-vscode",
         "bradlc.vscode-tailwindcss",
-        "ms-playwright.playwright"
+        "ms-playwright.playwright",
+        "openai.chatgpt"
       ],
       "settings": {
         "editor.formatOnSave": true,

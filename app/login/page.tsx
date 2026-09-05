@@ -10,6 +10,7 @@ type LoginResponse = AuthResponse & {
   access_token?: string;
   data?: {
     token?: string;
+    user?: AuthResponse['user'];
   };
 };
 
@@ -54,7 +55,7 @@ function LoginContent() {
       if (!token) {
         throw new Error('Invalid response: missing token');
       }
-      setAuth(token);
+      setAuth(token, res.user ?? res.data?.user ?? null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed';
       setError(message);
