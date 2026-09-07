@@ -64,6 +64,7 @@ Quantity constraints: whole units from 1 to 10,000; receipt quantities cannot ex
 - Permission UI expansion is deferred; backend authorization remains enforced.
 - Draft updates send `expectedDeliveryDate: null` when the date field is cleared. New drafts omit an empty date, matching the separate create contract.
 - Swagger currently lists the case-insensitive idempotency header twice with conflicting required flags. The frontend always sends it; the duplicate documentation should be consolidated on the backend.
+- If nested development routes return stale 404s after a build/restart on a mounted filesystem, set `DISABLE_TURBOPACK_FS_CACHE=1` in `.env.local`. This opts out of Turbopack's persistent dev cache while retaining the default in other environments. Cold startup/compilation is slower.
 
 ## Verification
 
