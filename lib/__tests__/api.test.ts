@@ -62,6 +62,19 @@ describe('API client', () => {
     await expect(api.getText('/inventory/barcode/ABC/image')).resolves.toBe('<svg>barcode</svg>');
   });
 
+  it('preserves idempotency headers alongside authorization and JSON headers', async () => {
+    localStorage.setItem('token', 'test-token');
+    fetchMock.mockResolvedValue(mockResponse({ body: '{}' }));
+    await api.post('/purchases/orders/25/receive', { items: [] }, { headers: { 'Idempotency-Key': 'receipt-attempt-1' } });
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toBe('/backend-api/purchases/orders/25/receive');
+    expect(options.method).toBe('POST');
+    expect(options.body).toBe('{"items":[]}');
+    expect(options.headers.get('Idempotency-Key')).toBe('receipt-attempt-1');
+    expect(options.headers.get('Authorization')).toBe('Bearer test-token');
+    expect(options.headers.get('Content-Type')).toBe('application/json');
+  });
+
   it('supports successful responses with no body', async () => {
     fetchMock.mockResolvedValue(
       mockResponse({ status: 204, statusText: 'No Content' }),

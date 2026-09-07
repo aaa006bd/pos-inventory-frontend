@@ -56,7 +56,7 @@ function PurchaseDraftForm({ products, suppliers, order }: { products: Product[]
     submitLock.current = true;
     setBusy(true); setError('');
     try {
-      const saved = order ? await purchasesApi.update(order.id, draft) : await purchasesApi.create(draft);
+      const saved = order ? await purchasesApi.update(order.id, { ...draft, expectedDeliveryDate: expectedDeliveryDate || null }) : await purchasesApi.create(draft);
       if (!saved?.id) throw new Error('The server did not return an order number.');
       router.push(`/dashboard/purchases/${saved.id}`);
     } catch (cause) {
@@ -74,7 +74,7 @@ function PurchaseDraftForm({ products, suppliers, order }: { products: Product[]
     <fieldset disabled={busy || mustReview} className="space-y-5 disabled:opacity-70">
       <div className={`${purchaseCard} grid gap-4 sm:grid-cols-2`}>
         <label className="space-y-1 text-sm">Supplier *<select required className={purchaseInput} value={supplierId} onChange={event => setSupplierId(event.target.value)}><option value="">Select supplier</option>{suppliers.filter(supplier => supplier.active !== false || supplier.id === order?.supplierId).map(supplier => <option key={supplier.id} value={supplier.id} disabled={supplier.active === false}>{supplier.name}{supplier.active === false ? ' (inactive)' : ''}</option>)}</select></label>
-        <label className="space-y-1 text-sm">Expected delivery date<input type="date" required={Boolean(order?.expectedDeliveryDate)} className={purchaseInput} value={expectedDeliveryDate} onChange={event => setExpectedDeliveryDate(event.target.value)} />{order?.expectedDeliveryDate && <span className="block text-xs text-slate-500">Choose a replacement date to change the existing delivery date.</span>}</label>
+        <label className="space-y-1 text-sm">Expected delivery date<input type="date" className={purchaseInput} value={expectedDeliveryDate} onChange={event => setExpectedDeliveryDate(event.target.value)} /></label>
         {!suppliers.some(supplier => supplier.active !== false) && <p className="text-sm text-amber-700">An active supplier is required. <Link href="/dashboard/suppliers" className="underline">Manage suppliers</Link></p>}
       </div>
       <section className={`${purchaseCard} space-y-4`} aria-label="Order items">

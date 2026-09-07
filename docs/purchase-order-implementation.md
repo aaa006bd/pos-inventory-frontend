@@ -13,7 +13,7 @@ Four screen types:
 3. `/dashboard/purchases/[id]`: order detail, outstanding quantities, confirm/cancel/edit/receive actions appropriate to backend state.
 4. `/dashboard/purchases/[id]/receive`: partial/full receipt and results, with links to inventory and barcode printing.
 
-Receipt History is a horizontal detail tab only if the backend provides persisted receipt history. Confirmation and cancellation use dialogs. Existing master-data and permission expansion are deferred.
+Receipt History is a horizontal detail tab backed by persisted receipts. Confirmation and cancellation use dialogs. Existing master-data and permission expansion are deferred.
 
 ## Local backend inspection — 2026-09-07
 
@@ -28,6 +28,7 @@ Swagger exposes:
 - `POST /purchases/orders/{id}/confirm`
 - `POST /purchases/orders/{id}/cancel`
 - `POST /purchases/orders/{id}/receive`
+- `GET /purchases/orders/{id}/receipts`
 
 All are marked as JWT protected. An unauthenticated list request returns HTTP 401.
 
@@ -41,7 +42,9 @@ The first inspection found empty DTOs. A subsequent live fetch on the same date 
 | Confirm | POST with no required request fields. Draft only. |
 | Cancel | `{ reason }` (max 1,000 characters). Draft or confirmed only. |
 | Receive | `{ items: [{ purchaseOrderLineId, quantity, lotNumber?, notes? }] }`. Receipt line IDs are order-line IDs, not product IDs. Blank lot numbers are omitted for automatic generation. |
-| Receipt result | `{ order, receipts: [{ purchaseOrderLineId, lotId, lotNumber, inventoryItemIds }] }`. |
+| Receipt result | `{ receiptId, order, receipts: [{ purchaseOrderLineId, lotId, lotNumber, inventoryItemIds }] }`; inventory item IDs are integers. |
+| Receipt history | `GET /purchases/orders/{id}/receipts?page=1&limit=20`, returning `{ items, total, page, limit, pageCount, hasNext }`. Each receipt has date, receiving user, total and lines with lot and accounting references. |
+| Receipt retries | `Idempotency-Key` header, max 200 characters, tenant/operation scope, seven-day retention. Same order/payload/key replays the original response; mismatched requests or a persisted processing record return 409. |
 
 Statuses: `DRAFT`, `CONFIRMED`, `PARTIALLY_RECEIVED`, `RECEIVED`, `CANCELLED`.
 
@@ -53,19 +56,20 @@ Quantity constraints: whole units from 1 to 10,000; receipt quantities cannot ex
 - Products are loaded across catalog pages so draft entry is not limited to the first page. Product choices can be filtered locally by name/SKU.
 - Order list filtering and pagination run on the server.
 - Draft editing and confirm/cancel/receive actions depend on the latest loaded order status. Direct edit/receive routes also check status.
-- Receipt submission has an explicit review step and an immediate submission lock. Failures do not automatically retry. Network/server failures warn that stock may already have been received and require review/reloading before another attempt.
+- Receipt submission has an explicit review step and an immediate submission lock. Before dispatch, the browser stores a UUID retry key, immutable request payload, timestamp and business/order identity in sessionStorage. Failures do not automatically retry. The user can retry the saved delivery with the same key and payload, including after a reload or when the current order is fully received. Recovery lasts for the current browser tab/session; closing the tab or clearing its storage removes it.
+- Retries stop slightly before the backend's seven-day key expiry. Expired attempts require checking receipt history before explicitly discarding recovery data; they never replay under a fresh key automatically. Processing/conflict responses retain the original attempt. Successful responses clear recovery data. Storage failures prevent an unrecoverable POST.
 - Successful receipts show returned lots and item counts. Links open lot-filtered inventory and the existing bulk barcode screen focused on the returned lot.
-- Supplier accounting links open the existing Finance screen. The UI does not post a second supplier payable or journal entry. Automatic accounting effects must be confirmed through a backend acceptance test.
-- No receipt-history tab: order reads expose cumulative line quantities, not persisted receipt history. Newly returned receipt summaries are shown on the receiving screen until navigation/reload.
-- The receipt item-ID schema says strings but its example contains numbers; the frontend accepts either and does not coerce IDs.
+- Supplier accounting links open the existing Finance screen. The receive endpoint now documents atomic receipt history, inventory lots/items and supplier payable journal creation. The UI does not post accounting separately. Transaction/concurrency behavior still needs a backend acceptance test; Swagger documents the guarantee but is not proof of its implementation.
+- The Receipt History tab loads persisted deliveries with paging, receiving user/date, line quantities/costs, notes, lot links and optional accounting references. Errors offer retry, and orders without receipts show an empty state.
 - Permission UI expansion is deferred; backend authorization remains enforced.
-- Existing delivery dates can be replaced but not cleared: the update DTO documents an optional date string, not a nullable value for removing a saved date.
+- Draft updates send `expectedDeliveryDate: null` when the date field is cleared. New drafts omit an empty date, matching the separate create contract.
+- Swagger currently lists the case-insensitive idempotency header twice with conflicting required flags. The frontend always sends it; the duplicate documentation should be consolidated on the backend.
 
 ## Verification
 
 Implementation checks on 2026-09-07:
 
-- Full Jest run: 25 tests passed; subsequently added draft-entry coverage: 2 tests passed (27 total).
+- Latest full Jest run: 37 tests passed, including immutable retry payloads, reload recovery against completed orders, 409 handling, expiry, tenant-separated recovery storage, date clearing and paginated receipt history.
 - Full lint passed; targeted lint and standalone TypeScript checks passed after the final form changes.
 - Production build passed and includes the list, new, detail, edit and receive routes.
 - All five purchase route URLs and the inventory/barcode destination pages returned HTTP 200 in development. These check route rendering, not authenticated data or mutations.

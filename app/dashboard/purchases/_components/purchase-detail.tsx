@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { canReceive, purchasesApi, purchaseProgress, remainingQuantity, formatAmount, formatPurchaseDate, purchaseError, uncertainMutation, type PurchaseOrder } from '@/lib/purchases';
 import { usePurchaseResource } from './use-purchase-resource';
+import PurchaseHistory from './purchase-history';
 import { PurchaseShell, PurchaseBadge, PurchaseError, PurchaseLoading, purchaseButton, purchaseSecondary, purchaseInput, purchaseCard } from './purchase-ui';
 
 export default function PurchaseDetail({ id }: { id: number }) {
@@ -13,6 +14,7 @@ export default function PurchaseDetail({ id }: { id: number }) {
 }
 
 function PurchaseDetailContent({ order, reload }: { order: PurchaseOrder; reload: () => void }) {
+  const [tab, setTab] = useState<'items' | 'receipts'>('items');
   const [action, setAction] = useState<'confirm' | 'cancel' | null>(null);
   const [notice, setNotice] = useState('');
   const [reviewRequired, setReviewRequired] = useState(false);
@@ -31,7 +33,17 @@ function PurchaseDetailContent({ order, reload }: { order: PurchaseOrder; reload
       <div><p className="text-xs uppercase tracking-wide text-slate-500">Expected delivery</p><p className="mt-2 font-semibold">{formatPurchaseDate(order.expectedDeliveryDate)}</p></div>
       <div><p className="text-xs uppercase tracking-wide text-slate-500">Order total</p><p className="mt-2 font-semibold tabular-nums">{formatAmount(order.totalAmount)}</p></div>
     </div>
-    <section className={purchaseCard} aria-label="Order items">
+    <div role="tablist" aria-label="Purchase order sections" className="flex gap-5 border-b border-slate-200 dark:border-slate-700">
+      {(['items', 'receipts'] as const).map(value => <button key={value} type="button" role="tab" id={`purchase-tab-${value}`} aria-selected={tab === value} aria-controls={`purchase-panel-${value}`} tabIndex={tab === value ? 0 : -1} onClick={() => setTab(value)} onKeyDown={event => {
+        if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+          event.preventDefault();
+          const target = event.key === 'Home' ? 'items' : event.key === 'End' ? 'receipts' : value === 'items' ? 'receipts' : 'items';
+          setTab(target); document.getElementById(`purchase-tab-${target}`)?.focus();
+        }
+      }} className={`pb-3 text-sm font-semibold ${tab === value ? 'border-b-2 border-sky-600 text-sky-700 dark:text-sky-400' : 'text-slate-500'}`}>{value === 'items' ? 'Items' : 'Receipt History'}</button>)}
+    </div>
+    <section role="tabpanel" id={`purchase-panel-${tab}`} aria-labelledby={`purchase-tab-${tab}`} tabIndex={0}>
+    {tab === 'receipts' ? <PurchaseHistory key={order.id} orderId={order.id} /> : <section className={purchaseCard} aria-label="Order items">
       <div className="mb-4 flex flex-wrap justify-between gap-2"><h2 className="font-semibold">Items</h2><p className="text-sm text-slate-500">{progress.received} of {progress.ordered} units received</p></div>
       <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b border-slate-200 text-xs uppercase text-slate-500 dark:border-slate-700"><tr>{['Product', 'Ordered', 'Received', 'Remaining', 'Unit cost', 'Line total'].map(label => <th key={label} className="px-3 py-3">{label}</th>)}</tr></thead>
         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{order.lines.map(line => <tr key={line.id}>
@@ -39,6 +51,7 @@ function PurchaseDetailContent({ order, reload }: { order: PurchaseOrder; reload
           <td className="px-3 py-4">{line.quantity}</td><td className="px-3 py-4">{line.receivedQuantity}</td><td className="px-3 py-4">{remainingQuantity(line)}</td><td className="px-3 py-4 tabular-nums">{formatAmount(line.unitCost)}</td><td className="px-3 py-4 tabular-nums">{formatAmount(line.lineTotal)}</td>
         </tr>)}</tbody></table></div>
       <p className="mt-4 text-sm font-medium">{order.status === 'CANCELLED' ? 'This order is cancelled. No further stock can be received.' : `${Math.max(0, progress.ordered - progress.received)} units outstanding`}</p>
+    </section>}
     </section>
     {order.notes && <section className={purchaseCard}><h2 className="mb-2 font-semibold">Order notes</h2><p className="whitespace-pre-wrap break-words text-sm">{order.notes}</p></section>}
     {order.cancellationReason && <section className={purchaseCard}><h2 className="mb-2 font-semibold">Cancellation reason</h2><p className="whitespace-pre-wrap break-words text-sm">{order.cancellationReason}</p></section>}

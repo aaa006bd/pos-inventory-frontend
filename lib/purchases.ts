@@ -19,6 +19,7 @@ export interface PurchaseLine {
 
 export interface PurchaseOrder {
   id: number;
+  tenantId: number;
   orderNumber: string;
   supplierId: number;
   supplier: { id: number; name: string; phone?: string; contactEmail?: string | null };
@@ -42,13 +43,48 @@ export interface PurchaseDraft {
   items: { productId: number; quantity: number; unitCost: number; notes?: string }[];
 }
 
+export type PurchaseDraftUpdate = Omit<PurchaseDraft, 'expectedDeliveryDate'> & { expectedDeliveryDate?: string | null };
+
 export interface PurchaseReceiptInput {
   items: { purchaseOrderLineId: number; quantity: number; lotNumber?: string; notes?: string }[];
 }
 
 export interface PurchaseReceiptResult {
+  receiptId: number;
   order: PurchaseOrder;
-  receipts: { purchaseOrderLineId: number; lotId: number; lotNumber: string; inventoryItemIds: (number | string)[] }[];
+  receipts: { purchaseOrderLineId: number; lotId: number; lotNumber: string; inventoryItemIds: number[] }[];
+}
+
+export interface PurchaseReceipt {
+  id: number;
+  purchaseOrderId: number;
+  receiptDate: string;
+  receivedById: number;
+  receivedBy: { id: number; email: string; role: string };
+  totalAmount: number | string;
+  lines: {
+    id: number;
+    purchaseOrderLineId: number;
+    productId: number;
+    productName: string;
+    receivedQuantity: number;
+    unitCost: number | string;
+    lineTotal: number | string;
+    notes?: string | null;
+    lotId: number;
+    lotNumber: string;
+    journalEntryId?: number | null;
+    accounting?: { id: number; eventType: string; reference: string; date: string } | null;
+  }[];
+}
+
+export interface PurchaseReceiptList {
+  items: PurchaseReceipt[];
+  total: number;
+  page: number;
+  limit: number;
+  pageCount: number;
+  hasNext: boolean;
 }
 
 export interface PurchaseListQuery {
@@ -72,10 +108,11 @@ export const purchasesApi = {
   list: (query: PurchaseListQuery) => api.get<PurchaseList>('/purchases/orders', { ...query }),
   get: (id: number) => api.get<PurchaseOrder>(`/purchases/orders/${id}`),
   create: (draft: PurchaseDraft) => api.post<PurchaseOrder>('/purchases/orders', draft),
-  update: (id: number, draft: PurchaseDraft) => api.patch<PurchaseOrder>(`/purchases/orders/${id}`, draft),
+  update: (id: number, draft: PurchaseDraftUpdate) => api.patch<PurchaseOrder>(`/purchases/orders/${id}`, draft),
   confirm: (id: number) => api.post<PurchaseOrder>(`/purchases/orders/${id}/confirm`, {}),
   cancel: (id: number, reason: string) => api.post<PurchaseOrder>(`/purchases/orders/${id}/cancel`, { reason }),
-  receive: (id: number, receipt: PurchaseReceiptInput) => api.post<PurchaseReceiptResult>(`/purchases/orders/${id}/receive`, receipt),
+  receive: (id: number, receipt: PurchaseReceiptInput, idempotencyKey: string) => api.post<PurchaseReceiptResult>(`/purchases/orders/${id}/receive`, receipt, { headers: { 'Idempotency-Key': idempotencyKey } }),
+  receipts: (id: number, page = 1, limit = 20) => api.get<PurchaseReceiptList>(`/purchases/orders/${id}/receipts`, { page, limit }),
 };
 
 export function canReceive(order: PurchaseOrder) {

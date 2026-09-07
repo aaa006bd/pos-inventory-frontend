@@ -2,7 +2,7 @@ import { api, ApiError } from '../api';
 import { purchasesApi, validateDraft, validateReceipt, purchaseProgress, uncertainMutation, getPurchaseCatalog, type PurchaseOrder } from '../purchases';
 
 export const orderFixture: PurchaseOrder = {
-  id: 25, orderNumber: 'PO-TEST-25', supplierId: 7, supplier: { id: 7, name: 'Test supplier' },
+  id: 25, tenantId: 3, orderNumber: 'PO-TEST-25', supplierId: 7, supplier: { id: 7, name: 'Test supplier' },
   status: 'PARTIALLY_RECEIVED', orderDate: '2026-09-07', totalAmount: '1255.00',
   createdAt: '2026-09-07', updatedAt: '2026-09-07',
   lines: [{ id: 101, productId: 42, product: { id: 42, name: 'Cotton Shirt' }, quantity: 10, receivedQuantity: 6, unitCost: '125.50', lineTotal: '1255.00' }],
@@ -36,8 +36,8 @@ describe('purchase workflow rules', () => {
   it('uses the documented receipt line identifier, not the product ID', async () => {
     const post = jest.spyOn(api, 'post').mockResolvedValue({ order: orderFixture, receipts: [] });
     const receipt = { items: [{ purchaseOrderLineId: 101, quantity: 2, lotNumber: 'LOT-1' }] };
-    await purchasesApi.receive(25, receipt);
-    expect(post).toHaveBeenCalledWith('/purchases/orders/25/receive', receipt);
+    await purchasesApi.receive(25, receipt, 'receipt-test-1');
+    expect(post).toHaveBeenCalledWith('/purchases/orders/25/receive', receipt, { headers: { 'Idempotency-Key': 'receipt-test-1' } });
   });
 
   it('uses PATCH for draft edits and requires a cancellation reason payload', async () => {

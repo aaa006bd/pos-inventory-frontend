@@ -9,7 +9,7 @@ jest.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 jest.mock('@/lib/auth-context', () => ({ useAuth: () => ({ token: 'test-token' }) }));
 
 const order: PurchaseOrder = {
-  id: 25, orderNumber: 'PO-25', supplierId: 7, supplier: { id: 7, name: 'Supplier One' },
+  id: 25, tenantId: 3, orderNumber: 'PO-25', supplierId: 7, supplier: { id: 7, name: 'Supplier One' },
   status: 'DRAFT', orderDate: '2026-09-07', totalAmount: 20,
   createdAt: '2026-09-07', updatedAt: '2026-09-07',
   lines: [{ id: 101, productId: 42, product: { id: 42, name: 'Shirt' }, quantity: 2, receivedQuantity: 0, unitCost: 10, lineTotal: 20 }],
@@ -43,5 +43,14 @@ describe('purchase draft entry', () => {
     render(<PurchaseDraftPage id={25} />);
     expect(await screen.findByText('This order is no longer a draft and cannot be edited.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save Draft' })).not.toBeInTheDocument();
+  });
+
+  it('sends null to clear a saved expected delivery date', async () => {
+    jest.spyOn(purchasesApi, 'get').mockResolvedValue({ ...order, expectedDeliveryDate: '2026-09-30' });
+    const update = jest.spyOn(purchasesApi, 'update').mockResolvedValue({ ...order, expectedDeliveryDate: null });
+    render(<PurchaseDraftPage id={25} />);
+    fireEvent.change(await screen.findByLabelText('Expected delivery date'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+    await waitFor(() => expect(update).toHaveBeenCalledWith(25, expect.objectContaining({ expectedDeliveryDate: null })));
   });
 });
