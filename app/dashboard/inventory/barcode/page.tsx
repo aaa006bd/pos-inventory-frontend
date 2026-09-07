@@ -1,13 +1,23 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { Suspense, useState, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import BarcodeTab from '@/app/components/BarcodeTab';
 import BulkBarcodeTab from '@/app/components/BulkBarcodeTab';
 
 type Tab = 'single' | 'bulk';
 
 export default function InventoryBarcodePage() {
-  const [activeTab, setActiveTab] = useState<Tab>('single');
+  return <Suspense fallback={<p>Loading barcodes…</p>}><InventoryBarcodeRoute /></Suspense>;
+}
+
+function InventoryBarcodeRoute() {
+  const lotNumber = useSearchParams().get('lotNumber') ?? '';
+  return <InventoryBarcodeContent key={lotNumber} lotNumber={lotNumber} />;
+}
+
+function InventoryBarcodeContent({ lotNumber }: { lotNumber: string }) {
+  const [activeTab, setActiveTab] = useState<Tab>(lotNumber ? 'bulk' : 'single');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const showMessage = useCallback((type: 'success' | 'error', text: string) => {
@@ -63,7 +73,7 @@ export default function InventoryBarcodePage() {
       {activeTab === 'single' ? (
         <BarcodeTab showMessage={showMessage} />
       ) : (
-        <BulkBarcodeTab showMessage={showMessage} />
+        <BulkBarcodeTab showMessage={showMessage} lotNumber={lotNumber || undefined} />
       )}
     </div>
   );

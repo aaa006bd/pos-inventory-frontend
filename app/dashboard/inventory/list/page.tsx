@@ -1,6 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { realApi, InventoryItemWithProduct } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import InventoryListTab from '@/app/components/InventoryListTab';
@@ -9,27 +11,38 @@ const LIMIT_OPTIONS = [10, 20, 30, 40] as const;
 type LimitOption = typeof LIMIT_OPTIONS[number] | 'all';
 
 export default function InventoryListPage() {
+  return <Suspense fallback={<p>Loading inventory…</p>}><InventoryListRoute /></Suspense>;
+}
+
+function InventoryListRoute() {
+  const lotNumber = useSearchParams().get('lotNumber') ?? '';
+  return <InventoryListContent key={lotNumber} lotNumber={lotNumber} />;
+}
+
+function InventoryListContent({ lotNumber }: { lotNumber: string }) {
   const { token } = useAuth();
   const [inventory, setInventory] = useState<InventoryItemWithProduct[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [limitOption, setLimitOption] = useState<LimitOption>(20);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const resolvedLimit = limitOption === 'all' ? 10000 : limitOption;
 
   const fetchInventory = useCallback(async (p: number, lim: number) => {
     setLoading(true);
+    setError('');
     try {
-      const res = await realApi.getInventory({ page: p, limit: lim });
+      const res = await realApi.getInventory({ page: p, limit: lim, lotNumber: lotNumber || undefined });
       setInventory(res.items);
       setTotal(res.total);
     } catch (err) {
-      console.error(err);
+      setError(err instanceof Error ? err.message : 'Unable to load inventory.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [lotNumber]);
 
   useEffect(() => {
     if (token) fetchInventory(page, resolvedLimit);
@@ -44,6 +57,8 @@ export default function InventoryListPage() {
 
   return (
     <>
+      {lotNumber && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200 p-4 text-sm dark:border-sky-800"><span>Stock for lot: <strong>{lotNumber}</strong></span><Link href="/dashboard/inventory/list" className="text-sky-600 underline">Show all inventory</Link></div>}
+      {error && <div role="alert" className="mb-4 rounded-xl bg-rose-50 p-4 text-rose-700 dark:bg-rose-950 dark:text-rose-200">{error} <button className="underline" onClick={() => fetchInventory(page, resolvedLimit)}>Try again</button></div>}
       <InventoryListTab
         inventory={inventory}
         onRefresh={() => fetchInventory(page, resolvedLimit)}

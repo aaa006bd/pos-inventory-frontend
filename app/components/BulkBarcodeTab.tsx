@@ -5,6 +5,7 @@ import { realApi, Lot, LotBarcodeItem } from '@/lib/api';
 
 interface BulkBarcodeTabProps {
   showMessage: (type: 'success' | 'error', text: string) => void;
+  lotNumber?: string;
 }
 
 type PrinterStatus = 'checking' | 'ready' | 'no-printer' | 'qz-offline';
@@ -50,7 +51,7 @@ async function checkPrinterStatus(): Promise<PrinterStatus> {
   }
 }
 
-export default function BulkBarcodeTab({ showMessage }: BulkBarcodeTabProps) {
+export default function BulkBarcodeTab({ showMessage, lotNumber }: BulkBarcodeTabProps) {
   const [lots, setLots] = useState<Lot[]>([]);
   const [loadingLots, setLoadingLots] = useState(true);
   const [expandedLots, setExpandedLots] = useState<Set<number>>(new Set());
@@ -63,11 +64,22 @@ export default function BulkBarcodeTab({ showMessage }: BulkBarcodeTabProps) {
   }, []);
 
   useEffect(() => {
-    realApi.getLots({ limit: 100 })
-      .then(res => setLots(res.items))
+    let active = true;
+    const loadLots = async () => {
+      for (let page = 1; ; page++) {
+        const res = await realApi.getLots({ page, limit: 100 });
+        if (!active) return;
+        if (!lotNumber) { setLots(res.items); return; }
+        const lot = res.items.find(item => item.lotNumber === lotNumber);
+        if (lot) { setLots([lot]); setExpandedLots(new Set([lot.id])); return; }
+        if (!res.items.length || page * res.limit >= res.total) throw new Error(`Lot ${lotNumber} was not found. Refresh to try again.`);
+      }
+    };
+    loadLots()
       .catch(err => showMessage('error', err instanceof Error ? err.message : 'Failed to load lots'))
-      .finally(() => setLoadingLots(false));
-  }, [showMessage]);
+      .finally(() => { if (active) setLoadingLots(false); });
+    return () => { active = false; };
+  }, [showMessage, lotNumber]);
 
   const toggleLotExpand = (lotId: number) => {
     setExpandedLots(prev => {

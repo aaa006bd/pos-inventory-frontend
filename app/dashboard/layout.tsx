@@ -12,14 +12,18 @@ const navItems = [
   { href: '/dashboard/categories', label: 'Categories', icon: 'folder' },
   { href: '/dashboard/products', label: 'Products', icon: 'box' },
   { href: '/dashboard/inventory/list', label: 'Inventory List', icon: 'inventory' },
-  { href: '/dashboard/inventory/receive', label: 'Receive', icon: 'receive' },
  
   { href: '/dashboard/sales/history', label: 'Sales History', icon: 'history' },
   { href: '/dashboard/inventory/adjust', label: 'Adjust', icon: 'adjust' },
   { href: '/dashboard/inventory/daily-stock', label: 'Daily Stock', icon: 'stock' },
   { href: '/dashboard/inventory/barcode', label: 'Barcode', icon: 'barcode' },
-  { href: '/dashboard/suppliers', label: 'Suppliers', icon: 'folder' },
   { href: '/dashboard/finance', label: 'Finance', icon: 'finance' },
+];
+
+const purchasingItems = [
+  { href: '/dashboard/purchases', label: 'Purchase Orders', icon: 'inventory' },
+  { href: '/dashboard/suppliers', label: 'Suppliers', icon: 'folder' },
+  { href: '/dashboard/inventory/receive', label: 'Manual Stock Receipt', icon: 'receive' },
 ];
 
 const icons: Record<string, ReactNode> = {
@@ -141,6 +145,25 @@ function SidebarContent({
             const isActive = isItemActive(pathname, item.href);
             return (
               <li key={item.href}>
+                {item.href === '/dashboard/inventory/list' && (
+                  <details open className="mb-2 rounded-xl border border-slate-200/70 dark:border-slate-700">
+                    <summary className="cursor-pointer px-3 py-3 text-sm font-semibold text-slate-800 dark:text-slate-200">Purchasing</summary>
+                    <ul className="space-y-1 px-2 pb-2">
+                      {purchasingItems.map((purchaseItem) => {
+                        const active = isItemActive(pathname, purchaseItem.href);
+                        return (
+                          <li key={purchaseItem.href}>
+                            <Link href={purchaseItem.href} onClick={onNavClick} aria-current={active ? 'page' : undefined}
+                              className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${active ? 'bg-slate-950 text-white dark:bg-slate-700' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700/50'}`}>
+                              <span className="shrink-0">{icons[purchaseItem.icon]}</span>
+                              {purchaseItem.label}
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </details>
+                )}
                 <Link
                   href={item.href}
                   onClick={onNavClick}
