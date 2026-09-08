@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
@@ -10,10 +10,24 @@ type LoginResponse = AuthResponse & {
   access_token?: string;
   data?: {
     token?: string;
+    user?: AuthResponse['user'];
   };
 };
 
-export default function LoginPage() {
+function LoginLoading() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.16),transparent_32%),linear-gradient(160deg,#f8fafc_0%,#eef6ff_48%,#fff7ed_100%)] dark:bg-none dark:bg-slate-950 px-6">
+      <div className="flex flex-col items-center gap-4 text-slate-600 dark:text-slate-300">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/70 dark:border-slate-700/50 bg-white/80 dark:bg-slate-800/80 shadow-[0_18px_50px_-24px_rgba(15,23,42,0.45)] backdrop-blur">
+          <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-sky-500 border-t-transparent" />
+        </div>
+        <p className="text-sm font-medium">Preparing your workspace...</p>
+      </div>
+    </div>
+  );
+}
+
+function LoginContent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -41,7 +55,7 @@ export default function LoginPage() {
       if (!token) {
         throw new Error('Invalid response: missing token');
       }
-      setAuth(token);
+      setAuth(token, res.user ?? res.data?.user ?? null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed';
       setError(message);
@@ -51,16 +65,7 @@ export default function LoginPage() {
   };
 
   if (authLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.16),transparent_32%),linear-gradient(160deg,#f8fafc_0%,#eef6ff_48%,#fff7ed_100%)] dark:bg-none dark:bg-slate-950 px-6">
-        <div className="flex flex-col items-center gap-4 text-slate-600 dark:text-slate-300">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/70 dark:border-slate-700/50 bg-white/80 dark:bg-slate-800/80 shadow-[0_18px_50px_-24px_rgba(15,23,42,0.45)] backdrop-blur">
-            <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-sky-500 border-t-transparent" />
-          </div>
-          <p className="text-sm font-medium">Preparing your workspace...</p>
-        </div>
-      </div>
-    );
+    return <LoginLoading />;
   }
 
   if (token) {
@@ -225,5 +230,13 @@ export default function LoginPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginLoading />}>
+      <LoginContent />
+    </Suspense>
   );
 }

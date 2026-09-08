@@ -193,7 +193,7 @@ function SidebarContent({
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? '/dashboard';
-  const { token, loading, logout } = useAuth();
+  const { token, user, loading, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -226,8 +226,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const rawTitle = segments.length ? segments[segments.length - 1] : 'dashboard';
   const pageTitle = rawTitle.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   const activeItem = navItems.find((item) => isItemActive(pathname, item.href)) ?? navItems[0];
-  const userEmail = 'owner@example.com';
-  const userLabel = 'Workspace Owner';
+  const userEmail = user?.email ?? 'Signed-in user';
+  const userLabel = user?.role
+    ? user.role.replace(/_/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase())
+    : 'Workspace User';
   const userInitial = userEmail.charAt(0).toUpperCase();
 
   return (

@@ -15,20 +15,17 @@ export default function InventoryDailyStockPage() {
     setTimeout(() => setMessage(null), 3000);
   }, []);
 
-  const fetchProducts = async () => {
-    try {
-      const prodsRes = await realApi.getProducts();
-      const prods = prodsRes.data || prodsRes;
-      setProducts(prods);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   useEffect(() => {
-    if (token) {
-      fetchProducts();
-    }
+    if (!token) return;
+
+    let active = true;
+    realApi.getProducts()
+      .then((response) => {
+        if (active) setProducts(response.data || response);
+      })
+      .catch(console.error);
+
+    return () => { active = false; };
   }, [token]);
 
   return (

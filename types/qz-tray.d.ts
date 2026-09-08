@@ -15,9 +15,7 @@ declare module 'qz-tray' {
     options?: Record<string, unknown>;
   }
 
-  interface QZConfig {
-    // opaque config object returned by configs.create
-  }
+  type QZConfig = Record<string, unknown>;
 
   const qz: {
     websocket: {

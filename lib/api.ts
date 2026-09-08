@@ -1,50 +1,80 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://217.217.249.227:3001';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/backend-api';
 
-class ApiError extends Error {
-  constructor(public status: number, message: string) {
+export const AUTH_UNAUTHORIZED_EVENT = 'auth:unauthorized';
+
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+    public details?: unknown,
+  ) {
     super(message);
     this.name = 'ApiError';
   }
 }
 
-async function requestText(endpoint: string): Promise<string> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  let authHeader: string | undefined;
-  if (token) {
-    authHeader = token.startsWith('Bearer ') || token.startsWith('Token ') || token.startsWith('bearer ')
-      ? token
-      : `Bearer ${token}`;
-  }
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    headers: {
-      ...(authHeader && { Authorization: authHeader }),
-    },
-  });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Request failed' }));
-    throw new ApiError(response.status, error.message || 'Request failed');
-  }
-  return response.text();
+type ResponseFormat = 'json' | 'text' | 'blob';
+type QueryValue = string | number | boolean | null | undefined;
+
+function getAuthorizationHeader(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+
+  const token = localStorage.getItem('token');
+  if (!token) return undefined;
+
+  return /^(Bearer|Token)\s/i.test(token) ? token : `Bearer ${token}`;
 }
 
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+function buildUrl(endpoint: string, params?: Record<string, QueryValue>): string {
+  if (!params) return endpoint;
 
-  let authHeader: string | undefined;
-  if (token) {
-    // Normalize token: if it already includes a scheme (Bearer, Token), use as-is; otherwise prepend Bearer
-    if (token.startsWith('Bearer ') || token.startsWith('Token ') || token.startsWith('bearer ')) {
-      authHeader = token;
-    } else {
-      authHeader = `Bearer ${token}`;
-    }
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== null && value !== undefined) query.set(key, String(value));
+  });
+
+  const queryString = query.toString();
+  if (!queryString) return endpoint;
+  return `${endpoint}${endpoint.includes('?') ? '&' : '?'}${queryString}`;
+}
+
+function getErrorMessage(payload: unknown, fallback: string): string {
+  if (typeof payload === 'string' && payload.trim()) return payload;
+  if (!payload || typeof payload !== 'object') return fallback;
+
+  const message = (payload as { message?: unknown }).message;
+  if (Array.isArray(message)) return message.map(String).join(', ');
+  if (typeof message === 'string' && message.trim()) return message;
+
+  const error = (payload as { error?: unknown }).error;
+  return typeof error === 'string' && error.trim() ? error : fallback;
+}
+
+async function parseErrorResponse(response: Response): Promise<unknown> {
+  const text = await response.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
   }
+}
 
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-    ...(authHeader && { Authorization: authHeader }),
-    ...options.headers,
-  };
+async function request<T>(
+  endpoint: string,
+  options: RequestInit = {},
+  responseFormat: ResponseFormat = 'json',
+): Promise<T> {
+  const headers = new Headers(options.headers);
+  const authHeader = getAuthorizationHeader();
+  if (authHeader) headers.set('Authorization', authHeader);
+  if (!headers.has('Accept')) {
+    headers.set('Accept', responseFormat === 'json' ? 'application/json' : '*/*');
+  }
+  if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
@@ -52,20 +82,44 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Request failed' }));
-    throw new ApiError(response.status, error.message || 'Request failed');
+    const details = await parseErrorResponse(response);
+    const fallback = response.statusText || `Request failed (${response.status})`;
+
+    if (response.status === 401 && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
+    }
+
+    throw new ApiError(response.status, getErrorMessage(details, fallback), details);
   }
 
-  return response.json();
+  if (response.status === 204 || response.headers.get('content-length') === '0') {
+    return undefined as T;
+  }
+
+  if (responseFormat === 'text') return response.text() as Promise<T>;
+  if (responseFormat === 'blob') return response.blob() as Promise<T>;
+
+  const text = await response.text();
+  if (!text) return undefined as T;
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new ApiError(
+      response.status,
+      'The server returned an invalid JSON response.',
+      text,
+    );
+  }
 }
 
 export const api = {
-  get: <T>(endpoint: string, params?: Record<string, string>) => {
-    const url = params 
-      ? `${endpoint}?${new URLSearchParams(params)}` 
-      : endpoint;
-    return request<T>(url);
-  },
+  get: <T>(endpoint: string, params?: Record<string, QueryValue>) =>
+    request<T>(buildUrl(endpoint, params)),
+  getText: (endpoint: string, params?: Record<string, QueryValue>) =>
+    request<string>(buildUrl(endpoint, params), {}, 'text'),
+  getBlob: (endpoint: string, params?: Record<string, QueryValue>) =>
+    request<Blob>(buildUrl(endpoint, params), {}, 'blob'),
   post: <T>(endpoint: string, data: unknown) => 
     request<T>(endpoint, { method: 'POST', body: JSON.stringify(data) }),
   put: <T>(endpoint: string, data: unknown) => 
@@ -75,6 +129,17 @@ export const api = {
   delete: <T>(endpoint: string) => 
     request<T>(endpoint, { method: 'DELETE' }),
 };
+
+type AttributeResponse = Omit<Attribute, 'options'> & { options?: unknown };
+
+function normalizeAttribute(attribute: AttributeResponse): Attribute {
+  return {
+    ...attribute,
+    options: Array.isArray(attribute.options)
+      ? attribute.options.filter((option): option is string => typeof option === 'string')
+      : [],
+  };
+}
 
 // Real API client methods matching mock API interface
 export const realApi = {
@@ -125,17 +190,21 @@ export const realApi = {
     api.get<Category[]>(`/products/categories/${id}/path`),
 
   // Attribute methods
-  getAttributes: (categoryId: number) =>
-    api.get<Attribute[]>(`/products/categories/${categoryId}/attributes`),
+  getAttributes: async (categoryId: number) => {
+    const attributes = await api.get<AttributeResponse[] | null>(
+      `/products/categories/${categoryId}/attributes`,
+    );
+    return Array.isArray(attributes) ? attributes.map(normalizeAttribute) : [];
+  },
   
-  getAttribute: (categoryId: number, id: number) =>
-    api.get<Attribute>(`/products/categories/${categoryId}/attributes/${id}`),
+  getAttribute: async (categoryId: number, id: number) =>
+    normalizeAttribute(await api.get<AttributeResponse>(`/products/categories/${categoryId}/attributes/${id}`)),
   
-  createAttribute: (categoryId: number, data: { name: string; type: string; options?: string[]; required: boolean; unit?: string }) =>
-    api.post<Attribute>(`/products/categories/${categoryId}/attributes`, data),
+  createAttribute: async (categoryId: number, data: { name: string; type: string; options?: string[]; required: boolean; unit?: string }) =>
+    normalizeAttribute(await api.post<AttributeResponse>(`/products/categories/${categoryId}/attributes`, data)),
   
-  updateAttribute: (categoryId: number, id: number, data: Partial<{ name: string; type: string; options: string[]; required: boolean; unit: string }>) =>
-    api.put<Attribute>(`/products/categories/${categoryId}/attributes/${id}`, data),
+  updateAttribute: async (categoryId: number, id: number, data: Partial<{ name: string; type: string; options: string[]; required: boolean; unit: string }>) =>
+    normalizeAttribute(await api.put<AttributeResponse>(`/products/categories/${categoryId}/attributes/${id}`, data)),
   
   deleteAttribute: (categoryId: number, id: number) =>
     api.delete(`/products/categories/${categoryId}/attributes/${id}`),
@@ -213,7 +282,7 @@ export const realApi = {
     api.get<DailyStockResponse>('/inventory/daily-stock', { date, productId: productId.toString() }),
   
   getBarcodeImage: async (barcode: string): Promise<BarcodeImageResponse> => {
-    const svg = await requestText(`/inventory/barcode/${barcode}/image`);
+    const svg = await api.getText(`/inventory/barcode/${barcode}/image`);
     return { svg };
   },
   
@@ -382,57 +451,6 @@ export interface BarcodeImageResponse {
 
 export interface BarcodeImagesResponse {
   images: string[];
-}
-
-export interface Category {
-  id: number;
-  name: string;
-  description: string | null;
-  parent?: Category;
-  attributes: Attribute[];
-  products: Product[];
-  active: boolean;
-}
-
-export interface Attribute {
-  id: number;
-  name: string;
-  type: string;
-  unit: string | null;
-  options: string[];
-  required: boolean;
-  categoryId: number;
-}
-
-export interface Product {
-  id: number;
-  name: string;
-  description: string | null;
-  basePrice: number;
-  sku?: string | null;
-  attributes: Record<string, string>[];
-  categoryId: number;
-  active: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface AuthResponse {
-  token: string;
-  user: User;
-}
-
-// Add new interfaces for API responses
-export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  page: number;
-  limit: number;
-}
-
-export interface SearchResponse<T> {
-  data: T[];
-  total: number;
 }
 
 export interface SupplierPayment {

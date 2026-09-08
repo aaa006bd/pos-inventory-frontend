@@ -133,6 +133,8 @@ export default function BarcodeTab({ showMessage }: BarcodeTabProps) {
 
             <div className="flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-8">
               {svgDataUrl && (
+                // A data URL from the barcode API is intentionally rendered without image optimization.
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={svgDataUrl}
                   alt={`barcode-${barcode}`}

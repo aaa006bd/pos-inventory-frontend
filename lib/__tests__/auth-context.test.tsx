@@ -1,6 +1,5 @@
 import { render, screen, act } from '@testing-library/react';
 import { AuthProvider, useAuth } from '../auth-context';
-import { ReactNode } from 'react';
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -37,7 +36,7 @@ function TestComponent() {
       <button
         data-testid="login-btn"
         onClick={() =>
-          login('test-token', { id: '1', email: 'test@example.com' })
+          login('test-token', { id: 1, email: 'test@example.com', role: 'admin' })
         }
       >
         Login
@@ -45,7 +44,7 @@ function TestComponent() {
       <button
         data-testid="signup-btn"
         onClick={() =>
-          signup('signup-token', { id: '2', email: 'signup@example.com' })
+          signup('signup-token', { id: 2, email: 'signup@example.com', role: 'admin' })
         }
       >
         Signup
@@ -90,8 +89,9 @@ describe('AuthContext', () => {
     expect(screen.getByTestId('token-info')).toHaveTextContent('test-token');
     expect(localStorageMock.getItem('token')).toBe('test-token');
     expect(JSON.parse(localStorageMock.getItem('user')!)).toEqual({
-      id: '1',
+      id: 1,
       email: 'test@example.com',
+      role: 'admin',
     });
   });
 
@@ -155,7 +155,7 @@ describe('AuthContext', () => {
   it('should persist user data across provider instances', () => {
     // Set initial data
     localStorageMock.setItem('token', 'persisted-token');
-    localStorageMock.setItem('user', JSON.stringify({ id: '3', email: 'persisted@example.com' }));
+    localStorageMock.setItem('user', JSON.stringify({ id: 3, email: 'persisted@example.com', role: 'admin' }));
 
     render(
       <AuthProvider>

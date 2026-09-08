@@ -1,26 +1,41 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { AUTH_UNAUTHORIZED_EVENT, type User } from './api';
 
 interface AuthContextType {
   token: string | null;
+  user: User | null;
   loading: boolean;
-  login: (token: string) => void;
-  signup: (token: string) => void;
+  login: (token: string, user: User | null) => void;
+  signup: (token: string, user: User | null) => void;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function getStoredAuth() {
+function getStoredToken() {
   if (typeof window === 'undefined') return null;
-  const storedToken = localStorage.getItem('token');
-  return storedToken ? storedToken : null;
+  return localStorage.getItem('token');
+}
+
+function getStoredUser(): User | null {
+  if (typeof window === 'undefined') return null;
+
+  const storedUser = localStorage.getItem('user');
+  if (!storedUser) return null;
+
+  try {
+    return JSON.parse(storedUser) as User;
+  } catch {
+    localStorage.removeItem('user');
+    return null;
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const storedToken = getStoredAuth();
-  const [token, setToken] = useState<string | null>(storedToken);
+  const [token, setToken] = useState<string | null>(getStoredToken);
+  const [user, setUser] = useState<User | null>(getStoredUser);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,23 +43,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer);
   }, []);
 
-  const login = (newToken: string) => {
+  const setSession = (newToken: string, newUser: User | null) => {
     localStorage.setItem('token', newToken);
+    if (newUser) localStorage.setItem('user', JSON.stringify(newUser));
+    else localStorage.removeItem('user');
     setToken(newToken);
+    setUser(newUser);
   };
 
-  const signup = (newToken: string) => {
-    localStorage.setItem('token', newToken);
-    setToken(newToken);
-  };
+  const login = (newToken: string, newUser: User | null) => setSession(newToken, newUser);
+  const signup = (newToken: string, newUser: User | null) => setSession(newToken, newUser);
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setToken(null);
+    setUser(null);
   };
 
+  useEffect(() => {
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, logout);
+    return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, logout);
+  });
+
   return (
-    <AuthContext.Provider value={{ token, loading, login, signup, logout }}>
+    <AuthContext.Provider value={{ token, user, loading, login, signup, logout }}>
       {children}
     </AuthContext.Provider>
   );
