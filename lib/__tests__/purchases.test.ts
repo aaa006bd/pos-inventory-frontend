@@ -63,6 +63,47 @@ describe('purchase workflow rules', () => {
     await expect(getPurchaseCatalog()).rejects.toThrow('incomplete');
   });
 
+  it('accepts the current items envelope with string pagination fields', async () => {
+    const get = jest.spyOn(api, 'get').mockResolvedValue({ items: [{ id: 1 }], total: 1, page: '1', limit: '20', pageCount: 1, hasNext: false });
+    await expect(getPurchaseCatalog()).resolves.toEqual([{ id: 1 }]);
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts the raw product array returned by the live catalog endpoint', async () => {
+    const products = [{ id: 1 }, { id: 2 }];
+    const get = jest.spyOn(api, 'get').mockResolvedValue(products);
+    await expect(getPurchaseCatalog()).resolves.toEqual(products);
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  it('loads every items page even when the backend returns fewer than 100 products', async () => {
+    const get = jest.spyOn(api, 'get')
+      .mockResolvedValueOnce({ items: [{ id: 1 }], total: 2, page: '1', limit: '1', hasNext: true })
+      .mockResolvedValueOnce({ items: [{ id: 2 }], total: 2, page: '2', limit: '1', hasNext: false });
+    await expect(getPurchaseCatalog()).resolves.toEqual([{ id: 1 }, { id: 2 }]);
+    expect(get).toHaveBeenLastCalledWith('/products', { page: 2, limit: 100 });
+  });
+
+  it('accepts an empty items catalog', async () => {
+    jest.spyOn(api, 'get').mockResolvedValue({ items: [], total: 0, hasNext: false });
+    await expect(getPurchaseCatalog()).resolves.toEqual([]);
+  });
+
+  it('rejects a prematurely terminated items catalog', async () => {
+    jest.spyOn(api, 'get').mockResolvedValue({ items: [{ id: 1 }], total: 2, hasNext: false });
+    await expect(getPurchaseCatalog()).rejects.toThrow('incomplete');
+  });
+
+  it('rejects repeated products across items pages', async () => {
+    jest.spyOn(api, 'get').mockResolvedValue({ items: [{ id: 1 }], total: 2, hasNext: true });
+    await expect(getPurchaseCatalog()).rejects.toThrow('changed while loading');
+  });
+
+  it.each([null, {}, { items: null, total: 1 }, { items: [], total: null }, { items: [], total: -1 }])('rejects malformed catalog response %p', async response => {
+    jest.spyOn(api, 'get').mockResolvedValue(response);
+    await expect(getPurchaseCatalog()).rejects.toThrow('Unable to read');
+  });
+
   it('treats network, server and unreadable-success responses as uncertain mutations', () => {
     expect(uncertainMutation(new TypeError('NetworkError'))).toBe(true);
     expect(uncertainMutation(new ApiError(500, 'Server error'))).toBe(true);

@@ -173,21 +173,68 @@ export function formatPurchaseDate(value?: string | null) {
   return value ? value.slice(0, 10) : '—';
 }
 
-// The existing catalog endpoint uses { data, total, page, limit }.
+type PurchaseCatalogEnvelope = (PaginatedResponse<Product> | {
+  items: Product[];
+  total: number | string;
+  page: number | string;
+  limit: number | string;
+}) & { hasNext?: boolean };
+type PurchaseCatalogResponse = Product[] | PurchaseCatalogEnvelope;
+
+function catalogResponseSummary(response: unknown, requestedPage: number) {
+  if (Array.isArray(response)) return { requestedPage, shape: 'array', itemCount: response.length };
+  if (!response || typeof response !== 'object') return { requestedPage, shape: typeof response };
+  const record = response as Record<string, unknown>;
+  const items = Array.isArray(record.items) ? record.items : Array.isArray(record.data) ? record.data : undefined;
+  return {
+    requestedPage,
+    shape: Array.isArray(record.items) ? 'items-envelope' : Array.isArray(record.data) ? 'data-envelope' : 'unknown-object',
+    keys: Object.keys(record).sort(),
+    itemCount: items?.length,
+    total: record.total,
+    responsePage: record.page,
+    responseLimit: record.limit,
+    hasNext: record.hasNext,
+  };
+}
+
+function catalogDebug(level: 'debug' | 'warn' | 'error', message: string, details: ReturnType<typeof catalogResponseSummary>) {
+  if (process.env.NODE_ENV !== 'development') return;
+  console[level](`[purchases:catalog] ${message}`, details);
+}
+
+// Current deployments may return a raw array or an items envelope; retain
+// compatibility with the older data envelope as well.
 // Follow pages instead of silently limiting order entry to the first page.
 export async function getPurchaseCatalog() {
   const products: Product[] = [];
   const seen = new Set<number>();
   for (let page = 1; ; page++) {
-    const response = await api.get<PaginatedResponse<Product>>('/products', { page, limit: 100 });
-    if (!Array.isArray(response.data) || !Number.isFinite(Number(response.total))) throw new Error('Unable to read the product catalog. Please try again.');
-    for (const product of response.data) {
-      if (seen.has(product.id)) throw new Error('The product catalog changed while loading. Please try again.');
+    const response = await api.get<PurchaseCatalogResponse>('/products', { page, limit: 100 });
+    const summary = catalogResponseSummary(response, page);
+    catalogDebug('debug', 'received response', summary);
+    const rawArray = Array.isArray(response);
+    const items = rawArray ? response : response && ('items' in response ? response.items : response.data);
+    const total = rawArray ? response.length : Number(response?.total);
+    if (!Array.isArray(items) || (!rawArray && (response.total == null || !Number.isSafeInteger(total) || total < 0))) {
+      catalogDebug('error', 'invalid response shape or pagination metadata', summary);
+      throw new Error('Unable to read the product catalog. Please try again.');
+    }
+    for (const product of items) {
+      if (seen.has(product.id)) {
+        catalogDebug('warn', 'duplicate product detected while paging', summary);
+        throw new Error('The product catalog changed while loading. Please try again.');
+      }
       seen.add(product.id);
       products.push(product);
     }
-    if (products.length >= Number(response.total)) return products;
-    if (!response.data.length) throw new Error('The product catalog is incomplete. Please try again.');
+    // A raw array has no pagination contract, so it represents the complete list.
+    if (rawArray) return products;
+    if (products.length >= total) return products;
+    if (!items.length || response.hasNext === false) {
+      catalogDebug('warn', 'pagination ended before the advertised total', summary);
+      throw new Error('The product catalog is incomplete. Please try again.');
+    }
   }
 }
 
