@@ -113,6 +113,7 @@ export const purchasesApi = {
   cancel: (id: number, reason: string) => api.post<PurchaseOrder>(`/purchases/orders/${id}/cancel`, { reason }),
   receive: (id: number, receipt: PurchaseReceiptInput, idempotencyKey: string) => api.post<PurchaseReceiptResult>(`/purchases/orders/${id}/receive`, receipt, { headers: { 'Idempotency-Key': idempotencyKey } }),
   receipts: (id: number, page = 1, limit = 20) => api.get<PurchaseReceiptList>(`/purchases/orders/${id}/receipts`, { page, limit }),
+  printReceipt: (orderId: number, receiptId: number) => api.getText(`/purchases/orders/${orderId}/receipts/${receiptId}/print`),
 };
 
 export function canReceive(order: PurchaseOrder) {

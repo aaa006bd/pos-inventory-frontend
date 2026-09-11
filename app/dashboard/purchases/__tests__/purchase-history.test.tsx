@@ -18,6 +18,7 @@ describe('purchase receipt history', () => {
     const receipts = jest.spyOn(purchasesApi, 'receipts').mockResolvedValueOnce(history).mockResolvedValueOnce({ ...history, items: [{ ...history.items[0], id: 54 }], page: 2, hasNext: false });
     render(<PurchaseHistory orderId={25} />);
     expect(await screen.findByText('Receipt #55')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Print receipt' })).toBeInTheDocument();
     expect(screen.getByText('PURCHASE-REF-350')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View stock' })).toHaveAttribute('href', '/dashboard/inventory/list?lotNumber=LOT%2F25+A');
     fireEvent.click(screen.getByRole('button', { name: 'Next receipts' }));

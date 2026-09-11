@@ -7,6 +7,7 @@ import { canReceive, remainingQuantity, purchasesApi, validateReceipt, purchaseE
 import { readReceiptAttempt, createReceiptAttempt, clearReceiptAttempt, canRetryReceiptAttempt, type ReceiptAttempt } from '@/lib/purchase-receipt-attempt';
 import { usePurchaseResource } from './use-purchase-resource';
 import { PurchaseShell, PurchaseBadge, PurchaseError, PurchaseLoading, purchaseButton, purchaseSecondary, purchaseInput, purchaseCard } from './purchase-ui';
+import PurchaseReceiptPrintButton from './purchase-receipt-print-button';
 
 export default function PurchaseReceive({ id }: { id: number }) {
   const load = useCallback(() => purchasesApi.get(id), [id]);
@@ -68,7 +69,7 @@ function ReceiptSession({ order, reload }: { order: PurchaseOrder; reload: () =>
       <div><p className="font-semibold">{receipt.lotNumber}</p><p className="text-sm text-slate-500">{order.lines.find(line => line.id === receipt.purchaseOrderLineId)?.product.name} · {receipt.inventoryItemIds.length} inventory items</p></div>
       <div className="flex flex-wrap gap-2"><Link className={purchaseSecondary} href={{ pathname: '/dashboard/inventory/list', query: { lotNumber: receipt.lotNumber } }}>View stock</Link><Link className={purchaseSecondary} href={{ pathname: '/dashboard/inventory/barcode', query: { lotNumber: receipt.lotNumber } }}>Print lot barcodes</Link></div>
     </div>)}</div>
-    <div className="flex flex-wrap gap-3"><Link href={`/dashboard/purchases/${order.id}`} className={purchaseButton}>Back to order</Link><Link className={purchaseSecondary} href="/dashboard/finance">Supplier balances & payments</Link></div>
+    <div className="flex flex-wrap items-start gap-3"><PurchaseReceiptPrintButton orderId={order.id} receiptId={result.receiptId} /><Link href={`/dashboard/purchases/${order.id}`} className={purchaseButton}>Back to order</Link><Link className={purchaseSecondary} href="/dashboard/finance">Supplier balances & payments</Link></div>
   </section>;
 
   const expired = attempt ? !canRetryReceiptAttempt(attempt) : false;

@@ -5,6 +5,7 @@ import { useCallback, useState } from 'react';
 import { purchasesApi, formatAmount } from '@/lib/purchases';
 import { usePurchaseResource } from './use-purchase-resource';
 import { PurchaseError, PurchaseLoading, purchaseCard, purchaseSecondary } from './purchase-ui';
+import PurchaseReceiptPrintButton from './purchase-receipt-print-button';
 
 export default function PurchaseHistory({ orderId }: { orderId: number }) {
   const [page, setPage] = useState(1);
@@ -18,7 +19,7 @@ export default function PurchaseHistory({ orderId }: { orderId: number }) {
     <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold">Receipt History</h2><button className={purchaseSecondary} onClick={resource.reload}>Refresh history</button></div>
     {!history.items.length && <div className={`${purchaseCard} text-sm text-slate-500`}>No receipts recorded yet.</div>}
     {history.items.map(receipt => <article key={receipt.id} className={`${purchaseCard} space-y-4`}>
-      <header className="flex flex-wrap justify-between gap-3"><div><h3 className="font-semibold">Receipt #{receipt.id}</h3><p className="mt-1 text-sm text-slate-500"><time dateTime={receipt.receiptDate}>{new Date(receipt.receiptDate).toLocaleString()}</time> · {receipt.receivedBy.email}</p></div><p className="text-sm font-semibold tabular-nums">Total: {formatAmount(receipt.totalAmount)}</p></header>
+      <header className="flex flex-wrap justify-between gap-3"><div><h3 className="font-semibold">Receipt #{receipt.id}</h3><p className="mt-1 text-sm text-slate-500"><time dateTime={receipt.receiptDate}>{new Date(receipt.receiptDate).toLocaleString()}</time> · {receipt.receivedBy.email}</p></div><div className="flex flex-col items-start gap-2 sm:items-end"><p className="text-sm font-semibold tabular-nums">Total: {formatAmount(receipt.totalAmount)}</p><PurchaseReceiptPrintButton orderId={orderId} receiptId={receipt.id} /></div></header>
       <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b border-slate-200 text-xs uppercase text-slate-500 dark:border-slate-700"><tr>{['Product / lot', 'Received', 'Unit cost', 'Line total', 'Accounting', 'Actions'].map(label => <th key={label} className="px-3 py-3">{label}</th>)}</tr></thead>
         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{receipt.lines.map(line => <tr key={line.id}>
           <td className="px-3 py-4"><p className="font-medium">{line.productName}</p><p className="text-xs text-slate-500">{line.lotNumber}</p>{line.notes && <p className="mt-1 max-w-xs whitespace-pre-wrap break-words text-xs text-slate-500">{line.notes}</p>}</td>

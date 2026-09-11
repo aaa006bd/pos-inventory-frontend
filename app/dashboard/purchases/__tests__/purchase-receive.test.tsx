@@ -35,6 +35,7 @@ describe('purchase receiving', () => {
     expect(receive).toHaveBeenCalledWith(25, { items: [{ purchaseOrderLineId: 101, quantity: 4 }] }, expect.any(String));
     finish({ receiptId: 55, order: { ...order, status: 'RECEIVED' }, receipts: [{ purchaseOrderLineId: 101, lotId: 88, lotNumber: 'LOT/25 A', inventoryItemIds: [901, 902, 903, 904] }] });
     expect(await screen.findByText('Stock received')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Print receipt' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View stock' })).toHaveAttribute('href', '/dashboard/inventory/list?lotNumber=LOT%2F25+A');
     expect(screen.getByRole('link', { name: 'Print lot barcodes' })).toHaveAttribute('href', '/dashboard/inventory/barcode?lotNumber=LOT%2F25+A');
     expect(screen.queryByRole('button', { name: 'Confirm Receipt' })).not.toBeInTheDocument();

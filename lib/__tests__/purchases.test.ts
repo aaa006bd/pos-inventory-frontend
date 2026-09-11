@@ -50,6 +50,12 @@ describe('purchase workflow rules', () => {
     expect(post).toHaveBeenCalledWith('/purchases/orders/25/cancel', { reason: 'Supplier unavailable' });
   });
 
+  it('requests the printable receipt HTML for the correct order and receipt', async () => {
+    const getText = jest.spyOn(api, 'getText').mockResolvedValue('<html>Receipt</html>');
+    await expect(purchasesApi.printReceipt(25, 55)).resolves.toBe('<html>Receipt</html>');
+    expect(getText).toHaveBeenCalledWith('/purchases/orders/25/receipts/55/print');
+  });
+
   it('loads products beyond the first response page', async () => {
     const get = jest.spyOn(api, 'get')
       .mockResolvedValueOnce({ data: [{ id: 1 }], total: 2, page: 1, limit: 1 })

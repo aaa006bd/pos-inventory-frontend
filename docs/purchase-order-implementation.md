@@ -29,6 +29,7 @@ Swagger exposes:
 - `POST /purchases/orders/{id}/cancel`
 - `POST /purchases/orders/{id}/receive`
 - `GET /purchases/orders/{id}/receipts`
+- `GET /purchases/orders/{orderId}/receipts/{receiptId}/print`
 
 All are marked as JWT protected. An unauthenticated list request returns HTTP 401.
 
@@ -44,6 +45,7 @@ The first inspection found empty DTOs. A subsequent live fetch on the same date 
 | Receive | `{ items: [{ purchaseOrderLineId, quantity, lotNumber?, notes? }] }`. Receipt line IDs are order-line IDs, not product IDs. Blank lot numbers are omitted for automatic generation. |
 | Receipt result | `{ receiptId, order, receipts: [{ purchaseOrderLineId, lotId, lotNumber, inventoryItemIds }] }`; inventory item IDs are integers. |
 | Receipt history | `GET /purchases/orders/{id}/receipts?page=1&limit=20`, returning `{ items, total, page, limit, pageCount, hasNext }`. Each receipt has date, receiving user, total and lines with lot and accounting references. |
+| Printable receipt | `GET /purchases/orders/{orderId}/receipts/{receiptId}/print`, returning authenticated printable Goods Receipt Note HTML. |
 | Receipt retries | `Idempotency-Key` header, max 200 characters, tenant/operation scope, seven-day retention. Same order/payload/key replays the original response; mismatched requests or a persisted processing record return 409. |
 
 Statuses: `DRAFT`, `CONFIRMED`, `PARTIALLY_RECEIVED`, `RECEIVED`, `CANCELLED`.
@@ -61,6 +63,7 @@ Quantity constraints: whole units from 1 to 10,000; receipt quantities cannot ex
 - Successful receipts show returned lots and item counts. Links open lot-filtered inventory and the existing bulk barcode screen focused on the returned lot.
 - Supplier accounting links open the existing Finance screen. The receive endpoint now documents atomic receipt history, inventory lots/items and supplier payable journal creation. The UI does not post accounting separately. Transaction/concurrency behavior still needs a backend acceptance test; Swagger documents the guarantee but is not proof of its implementation.
 - The Receipt History tab loads persisted deliveries with paging, receiving user/date, line quantities/costs, notes, lot links and optional accounting references. Errors offer retry, and orders without receipts show an empty state.
+- Each persisted receipt and the successful receiving result provide a Print receipt action. The client fetches HTML with the JWT, isolates it in a new window, and reports blocked pop-ups or API failures inline.
 - Permission UI expansion is deferred; backend authorization remains enforced.
 - Draft updates send `expectedDeliveryDate: null` when the date field is cleared. New drafts omit an empty date, matching the separate create contract.
 - Swagger currently lists the case-insensitive idempotency header twice with conflicting required flags. The frontend always sends it; the duplicate documentation should be consolidated on the backend.
