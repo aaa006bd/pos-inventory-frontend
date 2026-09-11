@@ -36,8 +36,8 @@ export default function InventoryReceivePage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Receive Inventory</h1>
-          <p className="page-subtitle">Receive new inventory items</p>
+          <h1 className="page-title">Manual Stock Receipt</h1>
+          <p className="page-subtitle">Receive stock without a purchase order. For an existing order, receive from its purchase order detail page.</p>
         </div>
       </div>
 

@@ -120,8 +120,8 @@ export const api = {
     request<string>(buildUrl(endpoint, params), {}, 'text'),
   getBlob: (endpoint: string, params?: Record<string, QueryValue>) =>
     request<Blob>(buildUrl(endpoint, params), {}, 'blob'),
-  post: <T>(endpoint: string, data: unknown) => 
-    request<T>(endpoint, { method: 'POST', body: JSON.stringify(data) }),
+  post: <T>(endpoint: string, data: unknown, options: Pick<RequestInit, 'headers'> = {}) =>
+    request<T>(endpoint, { ...options, method: 'POST', body: JSON.stringify(data) }),
   put: <T>(endpoint: string, data: unknown) => 
     request<T>(endpoint, { method: 'PUT', body: JSON.stringify(data) }),
   patch: <T>(endpoint: string, data: unknown) => 
