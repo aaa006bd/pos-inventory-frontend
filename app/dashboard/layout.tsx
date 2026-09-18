@@ -8,16 +8,22 @@ import { useTheme } from '@/lib/theme-context';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: 'home' },
-   { href: '/dashboard/inventory/sell', label: 'POS', icon: 'sell' },
   { href: '/dashboard/categories', label: 'Categories', icon: 'folder' },
   { href: '/dashboard/products', label: 'Products', icon: 'box' },
   { href: '/dashboard/inventory/list', label: 'Inventory List', icon: 'inventory' },
  
-  { href: '/dashboard/sales/history', label: 'Sales History', icon: 'history' },
   { href: '/dashboard/inventory/adjust', label: 'Adjust', icon: 'adjust' },
   { href: '/dashboard/inventory/daily-stock', label: 'Daily Stock', icon: 'stock' },
   { href: '/dashboard/inventory/barcode', label: 'Barcode', icon: 'barcode' },
   { href: '/dashboard/finance', label: 'Finance', icon: 'finance' },
+];
+
+const salesItems = [
+  { href: '/dashboard/inventory/sell', label: 'POS Checkout', icon: 'sell' },
+  { href: '/dashboard/sales/orders', label: 'Sales Orders', icon: 'inventory' },
+  { href: '/dashboard/sales/records', label: 'Sales Records', icon: 'history' },
+  { href: '/dashboard/sales/payments', label: 'Customer Payments', icon: 'finance' },
+  { href: '/dashboard/sales/history', label: 'Sales History', icon: 'history' },
 ];
 
 const purchasingItems = [
@@ -33,7 +39,7 @@ const icons: Record<string, ReactNode> = {
     </svg>
   ),
    sell: (
-    <svg className="h-48 w-48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   ),
@@ -145,6 +151,20 @@ function SidebarContent({
             const isActive = isItemActive(pathname, item.href);
             return (
               <li key={item.href}>
+                {item.href === '/dashboard/categories' && (
+                  <details open className="mb-2 rounded-xl border border-slate-200/70 dark:border-slate-700">
+                    <summary className="cursor-pointer px-3 py-3 text-sm font-semibold text-slate-800 dark:text-slate-200">Sales</summary>
+                    <ul className="space-y-1 px-2 pb-2">
+                      {salesItems.map((salesItem) => {
+                        const active = isItemActive(pathname, salesItem.href);
+                        return <li key={salesItem.href}><Link href={salesItem.href} onClick={onNavClick} aria-current={active ? 'page' : undefined}
+                          className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${active ? 'bg-slate-950 text-white dark:bg-slate-700' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700/50'}`}>
+                          <span className="shrink-0">{icons[salesItem.icon]}</span>{salesItem.label}
+                        </Link></li>;
+                      })}
+                    </ul>
+                  </details>
+                )}
                 {item.href === '/dashboard/inventory/list' && (
                   <details open className="mb-2 rounded-xl border border-slate-200/70 dark:border-slate-700">
                     <summary className="cursor-pointer px-3 py-3 text-sm font-semibold text-slate-800 dark:text-slate-200">Purchasing</summary>
