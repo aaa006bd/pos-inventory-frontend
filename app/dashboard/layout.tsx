@@ -11,6 +11,7 @@ const navItems = [
   { href: '/dashboard/categories', label: 'Categories', icon: 'folder' },
   { href: '/dashboard/products', label: 'Products', icon: 'box' },
   { href: '/dashboard/inventory/list', label: 'Inventory List', icon: 'inventory' },
+  { href: '/dashboard/inventory/movements', label: 'Inventory Movements', icon: 'history' },
  
   { href: '/dashboard/inventory/adjust', label: 'Adjust', icon: 'adjust' },
   { href: '/dashboard/inventory/daily-stock', label: 'Daily Stock', icon: 'stock' },
