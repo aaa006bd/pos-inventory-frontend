@@ -12,7 +12,7 @@ const list: SalesOrderList = {
     status: 'PARTIALLY_FULFILLED', orderDate: '2026-09-12', expectedDeliveryDate: null, paymentMethod: 'CREDIT', paymentTermDays: 30,
     grossAmount: 1250, discountAmount: 50, netAmount: 1200, notes: null, createdById: 2, confirmedById: 2, confirmedAt: null,
     cancelledById: null, cancelledAt: null, cancellationReason: null, createdAt: '2026-09-12T00:00:00Z', updatedAt: '2026-09-12T00:00:00Z',
-    lines: [{ id: 101, productId: 42, product: { id: 42, name: 'Tiller', sku: null, description: null }, quantity: 10, fulfilledQuantity: 4, unitPrice: 125, grossAmount: 1250, discountAmount: 50, netAmount: 1200, notes: null }] }],
+    lines: [{ id: 101, productId: 42, product: { id: 42, name: 'Tiller', sku: null, description: null, trackingMode: 'SERIALIZED', baseUnit: 'piece', quantityPrecision: 0 }, quantity: 10, fulfilledQuantity: 4, unitPrice: 125, grossAmount: 1250, discountAmount: 50, netAmount: 1200, notes: null }] }],
   total: 2, page: 1, limit: 20, pageCount: 2, hasNext: true,
 };
 
@@ -24,7 +24,7 @@ describe('sales order list', () => {
     const load = jest.spyOn(salesOrdersApi, 'list').mockResolvedValue(list);
     render(<SalesOrdersPage />);
     expect(await screen.findByRole('link', { name: 'SO-TEST-25' })).toHaveAttribute('href', '/dashboard/sales/orders/25');
-    expect(screen.getByText('4 / 10')).toBeInTheDocument();
+    expect(screen.getByText('0 / 1 lines')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'CONFIRMED' } });
     await waitFor(() => expect(load).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, status: 'CONFIRMED' })));
     fireEvent.click(await screen.findByRole('button', { name: 'Next' }));

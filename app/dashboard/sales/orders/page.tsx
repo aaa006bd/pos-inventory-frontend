@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useState, type FormEvent } from 'react';
 import { api } from '@/lib/api';
-import { salesOrdersApi, salesOrderStatuses, salesOrderStatusLabels, salesOrderProgress, formatSalesAmount, formatSalesDate, type SalesOrderListQuery, type SalesOrderStatus } from '@/lib/sales-orders';
+import { salesOrdersApi, salesOrderStatuses, salesOrderStatusLabels, formatSalesAmount, formatSalesDate, type SalesOrderListQuery, type SalesOrderStatus } from '@/lib/sales-orders';
 import { useSalesResource } from './_components/use-sales-resource';
 import { SalesShell, SalesError, SalesLoading, SalesStatusBadge, salesButton, salesSecondary, salesInput, salesCard } from './_components/sales-ui';
 
@@ -38,8 +38,8 @@ export default function SalesOrdersPage() {
         {!orders.data.items.length ? <div className="py-12 text-center"><h2 className="font-semibold">No sales orders found</h2><p className="mt-2 text-sm text-slate-500">Try changing your filters.</p></div> : <table className="w-full text-left text-sm">
           <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-700"><tr>{['Order', 'Customer', 'Date', 'Status', 'Fulfilled', 'Payment', 'Net total'].map(label => <th key={label} className="px-3 py-3">{label}</th>)}</tr></thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{orders.data.items.map(order => {
-            const progress = salesOrderProgress(order);
-            return <tr key={order.id} className="hover:bg-slate-50 dark:hover:bg-slate-800"><td className="px-3 py-4"><Link href={`/dashboard/sales/orders/${order.id}`} className="font-semibold text-sky-700 underline-offset-4 hover:underline dark:text-sky-400">{order.orderNumber}</Link></td><td className="px-3 py-4">{order.customer.name}</td><td className="whitespace-nowrap px-3 py-4">{formatSalesDate(order.orderDate)}</td><td className="px-3 py-4"><SalesStatusBadge status={order.status} /></td><td className="whitespace-nowrap px-3 py-4">{progress.fulfilled} / {progress.ordered}</td><td className="px-3 py-4">{order.paymentMethod === 'CREDIT' ? `Credit · ${order.paymentTermDays} days` : 'Cash'}</td><td className="px-3 py-4 tabular-nums">{formatSalesAmount(order.netAmount)}</td></tr>;
+            const fulfilledLines = order.lines.filter(line => Number(line.fulfilledQuantity) >= Number(line.quantity)).length;
+            return <tr key={order.id} className="hover:bg-slate-50 dark:hover:bg-slate-800"><td className="px-3 py-4"><Link href={`/dashboard/sales/orders/${order.id}`} className="font-semibold text-sky-700 underline-offset-4 hover:underline dark:text-sky-400">{order.orderNumber}</Link></td><td className="px-3 py-4">{order.customer.name}</td><td className="whitespace-nowrap px-3 py-4">{formatSalesDate(order.orderDate)}</td><td className="px-3 py-4"><SalesStatusBadge status={order.status} /></td><td className="whitespace-nowrap px-3 py-4">{fulfilledLines} / {order.lines.length} lines</td><td className="px-3 py-4">{order.paymentMethod === 'CREDIT' ? `Credit · ${order.paymentTermDays} days` : 'Cash'}</td><td className="px-3 py-4 tabular-nums">{formatSalesAmount(order.netAmount)}</td></tr>;
           })}</tbody>
         </table>}
       </div>

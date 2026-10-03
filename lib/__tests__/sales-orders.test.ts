@@ -7,7 +7,7 @@ const order: SalesOrder = {
   status: 'PARTIALLY_FULFILLED', orderDate: '2026-09-12', expectedDeliveryDate: null, paymentMethod: 'CREDIT', paymentTermDays: 30,
   grossAmount: '1250.00', discountAmount: '50.00', netAmount: '1200.00', notes: null, createdById: 2, confirmedById: 2, confirmedAt: null,
   cancelledById: null, cancelledAt: null, cancellationReason: null, createdAt: '2026-09-12T00:00:00Z', updatedAt: '2026-09-12T00:00:00Z',
-  lines: [{ id: 101, productId: 42, product: { id: 42, name: 'Tiller', sku: null, description: null }, quantity: 10, fulfilledQuantity: 4, unitPrice: '125.00', grossAmount: '1250.00', discountAmount: '50.00', netAmount: '1200.00', notes: null }],
+  lines: [{ id: 101, productId: 42, product: { id: 42, name: 'Tiller', sku: null, description: null, trackingMode: 'SERIALIZED', baseUnit: 'piece', quantityPrecision: 0 }, quantity: 10, fulfilledQuantity: 4, unitPrice: '125.00', grossAmount: '1250.00', discountAmount: '50.00', netAmount: '1200.00', notes: null }],
 };
 
 describe('sales order reads', () => {
@@ -50,6 +50,13 @@ describe('sales order draft creation', () => {
     expect(validateSalesOrderDraft({ ...base, items: [{ ...line, unitPrice: 1.234 }] })).toMatch(/two decimals/);
   });
 
+  it('allows quantity-product decimals only within configured precision', () => {
+    const base = { customerId: 1, paymentMethod: 'CASH' as const, items: [{ productId: 42, quantity: 2.5, unitPrice: 65, discountAmount: 0 }] };
+    const rice = [{ id: 42, trackingMode: 'QUANTITY' as const, baseUnit: 'kg' as const, quantityPrecision: 3 }];
+    expect(validateSalesOrderDraft(base, '2026-01-01', rice)).toBeNull();
+    expect(validateSalesOrderDraft({ ...base, items: [{ ...base.items[0], quantity: 2.5555 }] }, '2026-01-01', rice)).toMatch(/at most 3/);
+  });
+
   it('uses the documented order action and print endpoints', async () => {
     const patch = jest.spyOn(api, 'patch').mockResolvedValue(order);
     const post = jest.spyOn(api, 'post').mockResolvedValue(order);
@@ -58,13 +65,13 @@ describe('sales order draft creation', () => {
     await salesOrdersApi.update(25, draft);
     await salesOrdersApi.confirm(25);
     await salesOrdersApi.cancel(25, 'Customer request');
-    await salesOrdersApi.fulfill(25, [{ salesOrderLineId: 101, inventoryItemIds: [901] }]);
+    await salesOrdersApi.fulfill(25, { items: [{ salesOrderLineId: 101, inventoryItemIds: [901] }] }, 'fulfill-key');
     await salesOrdersApi.challan(81);
     await salesOrdersApi.invoice(81);
     expect(patch).toHaveBeenCalledWith('/sales/orders/25', draft);
     expect(post).toHaveBeenCalledWith('/sales/orders/25/confirm', {});
     expect(post).toHaveBeenCalledWith('/sales/orders/25/cancel', { reason: 'Customer request' });
-    expect(post).toHaveBeenCalledWith('/sales/orders/25/fulfill', { items: [{ salesOrderLineId: 101, inventoryItemIds: [901] }], notes: undefined });
+    expect(post).toHaveBeenCalledWith('/sales/orders/25/fulfill', { items: [{ salesOrderLineId: 101, inventoryItemIds: [901] }] }, { headers: { 'Idempotency-Key': 'fulfill-key' } });
     expect(getText).toHaveBeenCalledWith('/sales/81/challan');
     expect(getText).toHaveBeenCalledWith('/sales/81/invoice');
   });
