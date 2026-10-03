@@ -1,21 +1,14 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { InventoryItemWithProduct } from '@/lib/api';
 import SellTab from '@/app/components/SellTab';
 
 export default function InventorySellPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [sellKey, setSellKey] = useState(0);
 
   const showMessage = useCallback((type: 'success' | 'error', text: string) => {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 3000);
-  }, []);
-
-  const handleSuccess = useCallback((soldItems: InventoryItemWithProduct[]) => {
-    setMessage({ type: 'success', text: `Successfully sold ${soldItems.length} item(s)` });
-    setSellKey(prev => prev + 1);
   }, []);
 
   return (
@@ -33,7 +26,7 @@ export default function InventorySellPage() {
         </div>
       )}
 
-      <SellTab key={sellKey} onSuccess={handleSuccess} showMessage={showMessage} />
+      <SellTab showMessage={showMessage} />
     </div>
   );
 }

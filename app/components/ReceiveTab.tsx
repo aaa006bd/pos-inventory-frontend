@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { realApi } from '@/lib/api';
-import { Product, InventoryItemWithProduct, Supplier } from '@/lib/api';
+import { Product, Supplier, type ReceiveBatchInput } from '@/lib/api';
+import { validProductQuantity, formatQuantity } from '@/lib/product-quantity';
+import { useDurableInventoryMutation } from './useDurableInventoryMutation';
 
 interface ReceiveFormData {
   productId: string;
@@ -14,7 +16,6 @@ interface ReceiveFormData {
 
 interface ReceiveTabProps {
   products: Product[];
-  onSuccess: (items: InventoryItemWithProduct[]) => void;
   showMessage: (type: 'success' | 'error', text: string) => void;
 }
 
@@ -127,10 +128,10 @@ function Dropdown<T extends { id: number; name: string }>({
   );
 }
 
-export default function ReceiveTab({ products, onSuccess, showMessage }: ReceiveTabProps) {
+export default function ReceiveTab({ products, showMessage }: ReceiveTabProps) {
   const [form, setForm] = useState<ReceiveFormData>({ productId: '', quantity: '', supplierId: '', unitCost: '', notes: '' });
-  const [loading, setLoading] = useState(false);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const operation = useDurableInventoryMutation<ReceiveBatchInput, Awaited<ReturnType<typeof realApi.receiveBatchInventory>>>('manual-receipt', realApi.receiveBatchInventory);
 
   useEffect(() => {
     realApi.getSuppliers()
@@ -139,32 +140,21 @@ export default function ReceiveTab({ products, onSuccess, showMessage }: Receive
   }, []);
 
   const handleSubmit = async () => {
-    if (!form.productId || !form.quantity || !form.supplierId) return;
-    setLoading(true);
-    try {
-      const items = await realApi.receiveBatchInventory({
+    if (!selectedProduct || !form.quantity || !form.supplierId) return;
+    const tracking = { trackingMode: selectedProduct.trackingMode ?? 'SERIALIZED', baseUnit: selectedProduct.baseUnit ?? 'piece', quantityPrecision: selectedProduct.quantityPrecision ?? 0 };
+    if (!validProductQuantity(form.quantity, tracking)) { showMessage('error', `Enter a positive quantity with at most ${tracking.quantityPrecision} decimal places.`); return; }
+    operation.run({
         productId: Number(form.productId),
         quantity: Number(form.quantity),
         supplierId: Number(form.supplierId),
         unitCost: Number(form.unitCost),
         notes: form.notes || undefined,
       });
-      showMessage('success', `Received ${items.length} items successfully`);
-      const product = products.find(p => p.id === Number(form.productId));
-      setForm({ productId: '', quantity: '', supplierId: '', unitCost: '', notes: '' });
-      if (product) {
-        onSuccess(items.map(item => ({ ...item, product })));
-      }
-    } catch (err) {
-      showMessage('error', err instanceof Error ? err.message : 'Failed to receive inventory');
-    } finally {
-      setLoading(false);
-    }
   };
 
   const selectedProduct = products.find(p => p.id === Number(form.productId));
   const selectedSupplier = suppliers.find(s => s.id === Number(form.supplierId));
-  const isReady = !!form.productId && !!form.quantity && !!form.supplierId && !!form.unitCost && !loading;
+  const isReady = !!form.productId && !!form.quantity && !!form.supplierId && !!form.unitCost && operation.ready && !operation.busy && !operation.pending;
 
   return (
     <div className="min-h-[calc(100vh-8rem)] bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.10),transparent_35%),radial-gradient(circle_at_bottom_left,rgba(249,115,22,0.08),transparent_30%),linear-gradient(160deg,#f8fafc_0%,#eef6ff_50%,#fff7ed_100%)] dark:bg-none dark:bg-slate-950 p-6">
@@ -215,23 +205,24 @@ export default function ReceiveTab({ products, onSuccess, showMessage }: Receive
                 placeholder="Select a product..."
                 searchPlaceholder="Search products..."
                 avatarColor="bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300"
-                renderMeta={(p: Product) => p.basePrice ? `৳${p.basePrice} each` : undefined}
+                renderMeta={(p: Product) => `${p.trackingMode === 'QUANTITY' ? 'Quantity' : 'Serialized'} · ${p.baseUnit ?? 'piece'}`}
               />
             </div>
 
             {/* Quantity */}
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Quantity *</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Quantity{selectedProduct ? ` (${selectedProduct.baseUnit ?? 'piece'})` : ''} *</label>
               <div className="relative">
                 <svg className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
                 </svg>
                 <input
                   type="number"
-                  min="1"
+                  min={selectedProduct?.quantityPrecision ? 10 ** -selectedProduct.quantityPrecision : 1}
+                  step={selectedProduct?.quantityPrecision ? 10 ** -selectedProduct.quantityPrecision : 1}
                   value={form.quantity}
                   onChange={e => setForm({ ...form, quantity: e.target.value })}
-                  placeholder="Number of items to receive"
+                  placeholder={selectedProduct ? `Amount in ${selectedProduct.baseUnit ?? 'piece'}` : 'Quantity to receive'}
                   required
                   className="w-full rounded-2xl border border-slate-200 dark:border-slate-600 bg-slate-50/70 dark:bg-slate-700/50 pl-10 pr-4 py-3 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-sky-400 dark:focus:border-sky-500 focus:bg-white dark:focus:bg-slate-700 focus:ring-4 focus:ring-sky-100 dark:focus:ring-sky-900/50"
                 />
@@ -241,7 +232,7 @@ export default function ReceiveTab({ products, onSuccess, showMessage }: Receive
             {/* Unit Cost */}
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Unit Cost *
+                Cost per {selectedProduct?.baseUnit ?? 'unit'} *
               </label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-400 dark:text-slate-500 pointer-events-none">Tk</span>
@@ -279,11 +270,11 @@ export default function ReceiveTab({ products, onSuccess, showMessage }: Receive
                 <p className="text-xs font-semibold uppercase tracking-[0.15em] text-sky-600 dark:text-sky-400 mb-2">Summary</p>
                 <p className="text-sm text-slate-700 dark:text-slate-300 leading-6">
                   Receiving{' '}
-                  <span className="font-semibold text-slate-900 dark:text-slate-100">{form.quantity} unit{Number(form.quantity) !== 1 ? 's' : ''}</span>
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">{formatQuantity(Number(form.quantity), selectedProduct.baseUnit ?? 'piece')}</span>
                   {' '}of{' '}
                   <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedProduct.name}</span>
                   {form.unitCost && (
-                    <> at <span className="font-semibold text-slate-900 dark:text-slate-100">৳{Number(form.unitCost).toFixed(2)}</span> each</>
+                    <> at <span className="font-semibold text-slate-900 dark:text-slate-100">৳{Number(form.unitCost).toFixed(2)}</span> per {selectedProduct.baseUnit ?? 'piece'}</>
                   )}
                   {' '}from{' '}
                   <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedSupplier.name}</span>.
@@ -296,7 +287,7 @@ export default function ReceiveTab({ products, onSuccess, showMessage }: Receive
               disabled={!isReady}
               className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 dark:bg-white py-3.5 text-sm font-semibold text-white dark:text-slate-900 transition hover:bg-slate-800 dark:hover:bg-slate-100 disabled:cursor-not-allowed disabled:bg-slate-400 dark:disabled:bg-slate-600 dark:disabled:text-slate-400"
             >
-              {loading ? (
+              {operation.busy ? (
                 <>
                   <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} fill="none" />
@@ -306,6 +297,9 @@ export default function ReceiveTab({ products, onSuccess, showMessage }: Receive
                 </>
               ) : 'Receive Inventory'}
             </button>
+            {operation.error && <div role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{operation.error}</div>}
+            {operation.pending && <button type="button" className="w-full rounded-xl border p-3 text-sm font-semibold" disabled={operation.busy} onClick={operation.retry}>Recover receipt result</button>}
+            {operation.result && <div role="status" className="space-y-2 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900"><p>Received {formatQuantity(operation.result.lot.quantityReceived, selectedProduct?.baseUnit ?? 'piece')} in lot <strong>{operation.result.lot.lotNumber}</strong>.</p><p>{operation.result.items.length ? `${operation.result.items.length} barcode units created.` : 'Quantity balance updated; no barcode units were created.'}</p><button type="button" className="underline" onClick={() => { operation.reset(); setForm({ productId: '', quantity: '', supplierId: '', unitCost: '', notes: '' }); }}>Receive another batch</button></div>}
           </form>
         </div>
       </div>
