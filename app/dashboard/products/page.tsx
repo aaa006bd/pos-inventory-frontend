@@ -4,23 +4,25 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { realApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
-import { Category, Product, Attribute, Supplier } from '@/lib/api';
+import { Category, Product, Attribute } from '@/lib/api';
+import ProductTrackingFields from '@/app/components/ProductTrackingFields';
+import { serializedTracking, validateProductTracking } from '@/lib/product-quantity';
+import { getPurchaseCatalog } from '@/lib/purchases';
 
 export default function ProductsPage() {
   const { token, loading: authLoading } = useAuth();
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [categoryAttributes, setCategoryAttributes] = useState<Attribute[]>([]);
   const [attrLoading, setAttrLoading] = useState(false);
   const [formData, setFormData] = useState({
+    ...serializedTracking,
     name: '',
     basePrice: '',
     categoryId: '',
-    supplierId: '',
     attributes: [{}] as Record<string, string>[],
   });
   const [formError, setFormError] = useState('');
@@ -32,17 +34,10 @@ export default function ProductsPage() {
   const [catQuery, setCatQuery] = useState('');
   const catRef = useRef<HTMLDivElement>(null);
 
-  // Supplier dropdown
-  const [supOpen, setSupOpen] = useState(false);
-  const [supQuery, setSupQuery] = useState('');
-  const supRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (catRef.current && !catRef.current.contains(e.target as Node))
         setCatOpen(false);
-      if (supRef.current && !supRef.current.contains(e.target as Node))
-        setSupOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -58,18 +53,16 @@ export default function ProductsPage() {
     setLoading(true);
     Promise.all([
       realApi.getCategories(),
-      realApi.getProducts(),
-      realApi.getSuppliers(),
+      getPurchaseCatalog(),
     ])
-      .then(([cats, prodsRes, sups]) => {
-        const prods = prodsRes.data || prodsRes;
+      .then(([cats, prodsRes]) => {
+        const prods = prodsRes;
         const normalizedProducts = Array.isArray(prods) ? prods.map(p => ({
           ...p,
           basePrice: Number(p.basePrice),
         })) : [];
         setCategories(cats);
         setProducts(normalizedProducts);
-        setSuppliers(Array.isArray(sups) ? sups : []);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -93,30 +86,33 @@ export default function ProductsPage() {
   }
 
   const resetForm = () => ({
+    ...serializedTracking,
     name: '',
     basePrice: '',
     categoryId: '',
-    supplierId: '',
     attributes: [{}] as Record<string, string>[],
   });
 
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    const trackingError = validateProductTracking(formData);
+    if (trackingError) { setFormError(trackingError); return; }
     setFormError('');
     setSubmitting(true);
     try {
       await realApi.createProduct({
+        trackingMode: formData.trackingMode,
+        baseUnit: formData.baseUnit,
+        quantityPrecision: formData.quantityPrecision,
         name: formData.name,
         basePrice: Number(formData.basePrice),
         categoryId: Number(formData.categoryId),
-        supplierId: Number(formData.supplierId),
         attributes: formData.attributes,
       });
       setShowModal(false);
       setFormData(resetForm());
       setCategoryAttributes([]);
-      const prodsRes = await realApi.getProducts();
-      const prods = prodsRes.data || prodsRes;
+      const prods = await getPurchaseCatalog();
       setProducts(Array.isArray(prods) ? prods.map(p => ({ ...p, basePrice: Number(p.basePrice) })) : []);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Failed to create product');
@@ -164,12 +160,8 @@ export default function ProductsPage() {
   );
   const activeCount = products.filter(p => p.active).length;
   const selectedCat = categories.find(c => c.id === Number(formData.categoryId));
-  const selectedSup = suppliers.find(s => s.id === Number(formData.supplierId));
   const filteredCats = categories.filter(c =>
     c.name.toLowerCase().includes(catQuery.toLowerCase())
-  );
-  const filteredSups = suppliers.filter(s =>
-    s.name.toLowerCase().includes(supQuery.toLowerCase())
   );
 
   return (
@@ -194,8 +186,6 @@ export default function ProductsPage() {
               setCategoryAttributes([]);
               setCatOpen(false);
               setCatQuery('');
-              setSupOpen(false);
-              setSupQuery('');
             }}
             className="flex items-center gap-2 rounded-2xl bg-slate-950 dark:bg-slate-100 px-5 py-2.5 text-sm font-semibold text-white dark:text-slate-900 transition hover:bg-slate-800 dark:hover:bg-white"
           >
@@ -267,10 +257,10 @@ export default function ProductsPage() {
                       {product.name[0].toUpperCase()}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">{product.name}</p>
+                      <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">{product.name}</p><p className="text-xs text-slate-500">{product.trackingMode === 'QUANTITY' ? 'Quantity' : 'Serialized'} · {product.baseUnit ?? 'piece'} · {product.quantityPrecision ?? 0} decimal places (fixed)</p>
                       <p className="text-xs text-slate-400">{cat?.name || '—'}</p>
                     </div>
-                    <p className="shrink-0 text-sm font-semibold text-slate-900 dark:text-slate-100">৳{product.basePrice.toFixed(2)}</p>
+                    <p className="shrink-0 text-sm font-semibold text-slate-900 dark:text-slate-100">৳{product.basePrice.toFixed(2)} / {product.baseUnit ?? 'piece'}</p>
                     <div className="hidden md:flex shrink-0 flex-wrap gap-1 max-w-44">
                       {firstVariant && Object.entries(firstVariant).slice(0, 3).map(([k, v]) => (
                         <span key={k} className="rounded-full bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-xs text-slate-600 dark:text-slate-300">
@@ -316,6 +306,7 @@ export default function ProductsPage() {
             )}
 
             <form onSubmit={handleCreateProduct} className="space-y-4">
+              <ProductTrackingFields value={formData} onChange={tracking => setFormData({ ...formData, ...tracking })} />
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Name *</label>
                 <input
@@ -329,7 +320,7 @@ export default function ProductsPage() {
                 />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Price *</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Price per {formData.baseUnit} *</label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-400 dark:text-slate-500">Tk</span>
                   <input
@@ -405,81 +396,6 @@ export default function ProductsPage() {
                             </div>
                             {formData.categoryId === c.id.toString() && (
                               <svg className="w-4 h-4 text-sky-500 ml-auto shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                              </svg>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Supplier — searchable dropdown */}
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Supplier *</label>
-                <div className="relative" ref={supRef}>
-                  <button
-                    type="button"
-                    onClick={() => setSupOpen(o => !o)}
-                    className="w-full flex items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-slate-600 bg-slate-50/70 dark:bg-slate-700/50 px-4 py-3 text-sm outline-none transition hover:border-slate-300 dark:hover:border-slate-500 focus:border-sky-400 dark:focus:border-sky-500 focus:bg-white dark:focus:bg-slate-700 focus:ring-4 focus:ring-sky-100 dark:focus:ring-sky-900/50"
-                  >
-                    {selectedSup ? (
-                      <span className="flex items-center gap-3">
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-900/40 text-xs font-bold text-orange-700 dark:text-orange-300">
-                          {selectedSup.name[0].toUpperCase()}
-                        </span>
-                        <span className="font-medium text-slate-900 dark:text-slate-100">{selectedSup.name}</span>
-                      </span>
-                    ) : (
-                      <span className="text-slate-400 dark:text-slate-500">Select a supplier...</span>
-                    )}
-                    <svg className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${supOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-
-                  {supOpen && (
-                    <div className="absolute z-20 w-full mt-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-[0_20px_50px_-20px_rgba(15,23,42,0.30)] overflow-hidden">
-                      <div className="p-2 border-b border-slate-100 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/80">
-                        <div className="relative">
-                          <svg className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                          </svg>
-                          <input
-                            type="text"
-                            value={supQuery}
-                            onChange={e => setSupQuery(e.target.value)}
-                            onClick={e => e.stopPropagation()}
-                            placeholder="Search suppliers..."
-                            autoFocus
-                            className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 pl-9 pr-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-sky-400 dark:focus:border-sky-500 focus:ring-2 focus:ring-sky-100 dark:focus:ring-sky-900/50 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-                          />
-                        </div>
-                      </div>
-                      <div className="max-h-52 overflow-y-auto">
-                        {filteredSups.length === 0 ? (
-                          <p className="px-4 py-3 text-sm text-slate-400">No suppliers found</p>
-                        ) : filteredSups.map(s => (
-                          <button
-                            key={s.id}
-                            type="button"
-                            onClick={() => {
-                              setFormData({ ...formData, supplierId: s.id.toString() });
-                              setSupOpen(false);
-                              setSupQuery('');
-                            }}
-                            className={`w-full text-left flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-orange-50/60 dark:hover:bg-slate-700/60 ${formData.supplierId === s.id.toString() ? 'bg-orange-50 dark:bg-slate-700/80' : ''}`}
-                          >
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-100 dark:bg-orange-900/40 text-xs font-bold text-orange-700 dark:text-orange-300">
-                              {s.name[0].toUpperCase()}
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{s.name}</div>
-                            </div>
-                            {formData.supplierId === s.id.toString() && (
-                              <svg className="w-4 h-4 text-orange-500 ml-auto shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                               </svg>
                             )}

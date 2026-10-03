@@ -1,3 +1,5 @@
+import type { ProductTracking } from './product-quantity';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/backend-api';
 
 export const AUTH_UNAUTHORIZED_EVENT = 'auth:unauthorized';
@@ -124,8 +126,8 @@ export const api = {
     request<T>(endpoint, { ...options, method: 'POST', body: JSON.stringify(data) }),
   put: <T>(endpoint: string, data: unknown) => 
     request<T>(endpoint, { method: 'PUT', body: JSON.stringify(data) }),
-  patch: <T>(endpoint: string, data: unknown) => 
-    request<T>(endpoint, { method: 'PATCH', body: JSON.stringify(data) }),
+  patch: <T>(endpoint: string, data: unknown, options: Pick<RequestInit, 'headers'> = {}) =>
+    request<T>(endpoint, { ...options, method: 'PATCH', body: JSON.stringify(data) }),
   delete: <T>(endpoint: string) => 
     request<T>(endpoint, { method: 'DELETE' }),
 };
@@ -218,7 +220,7 @@ export const realApi = {
   getProduct: (id: number) =>
     api.get<Product>(`/products/${id}`),
   
-  createProduct: (data: { name: string; description?: string; basePrice: number; categoryId: number; supplierId: number; attributes: Record<string, string>[] }) =>
+  createProduct: (data: { name: string; description?: string; basePrice: number; defaultCost?: number; categoryId: number; supplierId?: number; attributes: Record<string, string>[] } & Partial<ProductTracking>) =>
     api.post<Product>('/products', data),
   
   updateProduct: (id: number, data: Partial<{ name: string; description: string; basePrice: number; categoryId: number; attributes: Record<string, string>; active: boolean }>) =>
@@ -256,8 +258,8 @@ export const realApi = {
     return api.get<InventoryPaginatedResponse>('/inventory/items', Object.keys(q).length ? q : undefined);
   },
   
-  receiveBatchInventory: (data: { productId: number; quantity: number; supplierId: number; unitCost: number; notes?: string }) =>
-    api.post<InventoryItem[]>('/inventory/receive-batch', data),
+  receiveBatchInventory: (data: ReceiveBatchInput, idempotencyKey: string) =>
+    api.post<BatchReceiptResponse>('/inventory/receive-batch', data, { headers: { 'Idempotency-Key': idempotencyKey } }),
   
   scanBarcode: (barcode: string) =>
     api.get<InventoryItemWithProduct>('/inventory/scan', { barcode }),
@@ -265,18 +267,14 @@ export const realApi = {
   sellItem: (data: { barcode: string; notes?: string }) =>
     api.patch<InventoryItem>('/inventory/sell', data),
   
-  sellBatchItems: (data: { items: { barcode: string; discountAmount?: number; notes?: string }[]; paymentMethod: string; customerId: number }) =>
-    api.patch<InventoryItem[]>('/inventory/sell', data),
+  sellBatchItems: (data: CheckoutInput, idempotencyKey: string) =>
+    api.patch<CheckoutResponse>('/inventory/sell', data, { headers: { 'Idempotency-Key': idempotencyKey } }),
   
   adjustItem: (data: { barcode: string; status: 'damaged' | 'returned'; notes?: string }) =>
     api.patch<InventoryItem>('/inventory/adjust', data),
 
-  createReturn: (data: {
-    type: 'supplier_return';
-    lotNumber?: string;
-    items?: { barcode: string; notes?: string }[];
-    notes?: string;
-  }) => api.post<unknown>('/inventory/returns', data),
+  createReturn: (data: SupplierReturnInput, idempotencyKey: string) =>
+    api.post<unknown>('/inventory/returns', data, { headers: { 'Idempotency-Key': idempotencyKey } }),
   
   getDailyStock: (date: string, productId: number) =>
     api.get<DailyStockResponse>('/inventory/daily-stock', { date, productId: productId.toString() }),
@@ -358,6 +356,9 @@ export interface Attribute {
 }
 
 export interface Product {
+  trackingMode?: ProductTracking['trackingMode'];
+  baseUnit?: ProductTracking['baseUnit'];
+  quantityPrecision?: number;
   id: number;
   name: string;
   description: string | null;
@@ -439,6 +440,14 @@ export interface InventoryItemWithProduct extends InventoryItem {
   product: Product;
   supplier?: Supplier | null;
 }
+
+export interface ReceiveBatchInput { productId: number; quantity: number; supplierId: number; unitCost: number; notes?: string }
+export interface SupplierReturnInput { type: 'supplier_return'; lotNumber?: string; items?: { barcode: string; notes?: string }[]; notes?: string }
+export interface ReceiptLot { id: number; productId: number; lotNumber: string; quantityReceived: number; totalCost: number; unitCost: number }
+export interface BatchReceiptResponse { items: InventoryItem[]; lot: ReceiptLot }
+export type CheckoutLine = { barcode: string; productId?: never; quantity?: never; salePrice: number; discountAmount: number; notes?: string } | { barcode?: never; productId: number; quantity: number; salePrice: number; discountAmount: number; notes?: string };
+export interface CheckoutInput { items: CheckoutLine[]; paymentMethod: 'CASH' | 'CREDIT'; customerId?: number }
+export interface CheckoutResponse { soldItems: InventoryItem[]; salesRecord: { id: number; saleNumber: string; netAmount: number; grossAmount: number; discountAmount: number; outstandingAmount: number; lines: unknown[] } }
 
 export interface DailyStockResponse {
   opening: number;
