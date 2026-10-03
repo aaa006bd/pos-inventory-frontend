@@ -8,3 +8,9 @@ it('reads the mixed-stock endpoint and retains separate units and backend values
   expect((await getStockBalances(1)).items).toEqual(items);
   expect(get).toHaveBeenCalledWith('/inventory/stock/balances', { page: 1, limit: 20, productId: undefined });
 });
+
+it('normalizes string pagination metadata returned by the backend', async () => {
+  const items = [{ productId: 10, productName: 'Raja Pump (40)', trackingMode: 'SERIALIZED', baseUnit: 'piece', quantity: 1, stockValue: 100 }];
+  jest.spyOn(api, 'get').mockResolvedValue({ items, page: '1', limit: '20', total: 1 });
+  expect(await getStockBalances(1, 10)).toEqual({ items, page: 1, limit: 20, total: 1 });
+});
