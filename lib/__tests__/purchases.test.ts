@@ -5,7 +5,7 @@ export const orderFixture: PurchaseOrder = {
   id: 25, tenantId: 3, orderNumber: 'PO-TEST-25', supplierId: 7, supplier: { id: 7, name: 'Test supplier' },
   status: 'PARTIALLY_RECEIVED', orderDate: '2026-09-07', totalAmount: '1255.00',
   createdAt: '2026-09-07', updatedAt: '2026-09-07',
-  lines: [{ id: 101, productId: 42, product: { id: 42, name: 'Cotton Shirt' }, quantity: 10, receivedQuantity: 6, unitCost: '125.50', lineTotal: '1255.00' }],
+  lines: [{ id: 101, productId: 42, product: { id: 42, name: 'Cotton Shirt', trackingMode: 'SERIALIZED', baseUnit: 'piece', quantityPrecision: 0 }, quantity: 10, receivedQuantity: 6, unitCost: '125.50', lineTotal: '1255.00' }],
 };
 
 describe('purchase workflow rules', () => {

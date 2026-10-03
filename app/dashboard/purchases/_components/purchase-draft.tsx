@@ -7,6 +7,7 @@ import { getPurchaseCatalog, getPurchaseSuppliers, purchasesApi, validateDraft, 
 import type { Product, Supplier } from '@/lib/api';
 import { usePurchaseResource } from './use-purchase-resource';
 import { PurchaseShell, PurchaseError, PurchaseLoading, purchaseInput, purchaseButton, purchaseSecondary, purchaseCard } from './purchase-ui';
+import { serializedTracking, type ProductTracking } from '@/lib/product-quantity';
 
 interface DraftRow { key: number; productId: string; quantity: string; unitCost: string; notes: string }
 
@@ -49,7 +50,7 @@ function PurchaseDraftForm({ products, suppliers, order }: { products: Product[]
       notes: notes.trim(),
       items: rows.map(row => ({ productId: Number(row.productId), quantity: Number(row.quantity), unitCost: Number(row.unitCost), notes: row.notes.trim() || undefined })),
     };
-    const validation = validateDraft(draft);
+    const validation = validateDraft(draft, products);
     if (validation) { setError(validation); return; }
     if (!suppliers.some(supplier => supplier.id === draft.supplierId && supplier.active !== false)) { setError('Select an active supplier.'); return; }
     if (draft.items.some(item => !products.some(product => product.id === item.productId && product.active !== false))) { setError('Select an active product for every line.'); return; }
@@ -83,6 +84,11 @@ function PurchaseDraftForm({ products, suppliers, order }: { products: Product[]
         <div className="space-y-4">{rows.map((row, index) => {
           const selected = products.find(product => String(product.id) === row.productId);
           const priorLine = order?.lines.find(line => String(line.productId) === row.productId);
+          const candidate = selected ?? priorLine?.product;
+          const tracking: ProductTracking = candidate?.trackingMode && candidate.baseUnit && candidate.quantityPrecision != null
+            ? { trackingMode: candidate.trackingMode, baseUnit: candidate.baseUnit, quantityPrecision: candidate.quantityPrecision }
+            : serializedTracking;
+          const step = 10 ** -tracking.quantityPrecision;
           return <div key={row.key} className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
             <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-semibold">Line {index + 1}</h3><button type="button" aria-label={`Remove line ${index + 1}`} className="text-sm text-rose-600 disabled:opacity-40" disabled={rows.length === 1} onClick={() => setRows(previous => previous.filter(item => item.key !== row.key))}>Remove</button></div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -90,8 +96,8 @@ function PurchaseDraftForm({ products, suppliers, order }: { products: Product[]
                 {row.productId && !visibleProducts.some(product => String(product.id) === row.productId) && <option value={row.productId}>{selected?.name ?? priorLine?.product.name ?? `Product #${row.productId}`}</option>}
                 {visibleProducts.map(product => <option key={product.id} value={product.id}>{product.name}{product.sku ? ` · ${product.sku}` : ''}</option>)}
               </select></label>
-              <label className="space-y-1 text-sm">Quantity *<input required type="number" min="1" max="10000" step="1" className={purchaseInput} value={row.quantity} onChange={event => updateRow(row.key, { quantity: event.target.value })} /></label>
-              <label className="space-y-1 text-sm">Unit cost *<input required type="number" min="0.01" step="any" className={purchaseInput} value={row.unitCost} onChange={event => updateRow(row.key, { unitCost: event.target.value })} /></label>
+              <label className="space-y-1 text-sm">Quantity * <span className="text-slate-500">({tracking.baseUnit})</span><input aria-label="Quantity *" required type="number" min={step} max="10000" step={step} className={purchaseInput} value={row.quantity} onChange={event => updateRow(row.key, { quantity: event.target.value })} /></label>
+              <label className="space-y-1 text-sm">Unit cost * <span className="text-slate-500">(per {tracking.baseUnit})</span><input aria-label="Unit cost *" required type="number" min="0.01" step="any" className={purchaseInput} value={row.unitCost} onChange={event => updateRow(row.key, { unitCost: event.target.value })} /></label>
             </div>
             <div className="mt-3 flex flex-wrap items-end justify-between gap-3"><label className="min-w-48 flex-1 space-y-1 text-sm">Line notes<input maxLength={1000} className={purchaseInput} value={row.notes} onChange={event => updateRow(row.key, { notes: event.target.value })} /></label><p className="py-2 text-sm font-semibold tabular-nums">Line total: {formatAmount((Number(row.quantity) || 0) * (Number(row.unitCost) || 0))}</p></div>
           </div>;

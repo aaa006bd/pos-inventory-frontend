@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { realApi, Product, InventoryItemWithProduct } from '@/lib/api';
+import { Product } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import ReceiveTab from '@/app/components/ReceiveTab';
+import { getPurchaseCatalog } from '@/lib/purchases';
 
 export default function InventoryReceivePage() {
   const { token } = useAuth();
@@ -19,18 +20,12 @@ export default function InventoryReceivePage() {
     if (!token) return;
 
     let active = true;
-    realApi.getProducts()
-      .then((response) => {
-        if (active) setProducts(response.data || response);
-      })
+    getPurchaseCatalog()
+      .then((response) => { if (active) setProducts(response); })
       .catch(console.error);
 
     return () => { active = false; };
   }, [token]);
-
-  const handleSuccess = (newItems: InventoryItemWithProduct[]) => {
-    setMessage({ type: 'success', text: `Received ${newItems.length} items successfully` });
-  };
 
   return (
     <div>
@@ -49,7 +44,6 @@ export default function InventoryReceivePage() {
 
       <ReceiveTab 
         products={products}
-        onSuccess={handleSuccess}
         showMessage={showMessage}
       />
     </div>

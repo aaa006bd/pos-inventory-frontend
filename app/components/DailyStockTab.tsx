@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { realApi } from '@/lib/api';
 import { Product, DailyStockResponse } from '@/lib/api';
+import { formatQuantity, serializedTracking, type ProductTracking } from '@/lib/product-quantity';
 
 interface DailyStockTabProps {
   products: Product[];
@@ -43,6 +44,9 @@ export default function DailyStockTab({ products, showMessage }: DailyStockTabPr
   };
 
   const selected = products.find(p => p.id === Number(productId));
+  const tracking: ProductTracking = selected?.trackingMode && selected.baseUnit && selected.quantityPrecision != null
+    ? { trackingMode: selected.trackingMode, baseUnit: selected.baseUnit, quantityPrecision: selected.quantityPrecision }
+    : serializedTracking;
   const filtered = products.filter(p => p.name.toLowerCase().includes(query.toLowerCase()));
 
   const movement = stock ? stock.closing - stock.opening : 0;
@@ -207,11 +211,11 @@ export default function DailyStockTab({ products, showMessage }: DailyStockTabPr
 
             <div className="grid grid-cols-3 gap-4">
               {[
-                { label: 'Opening Stock', value: stock.opening, color: 'from-sky-500 to-blue-600', text: 'text-sky-700 dark:text-sky-300' },
-                { label: 'Closing Stock', value: stock.closing, color: 'from-emerald-500 to-sky-500', text: 'text-emerald-700 dark:text-emerald-300' },
+                { label: 'Opening Stock', value: formatQuantity(stock.opening, tracking.baseUnit), color: 'from-sky-500 to-blue-600', text: 'text-sky-700 dark:text-sky-300' },
+                { label: 'Closing Stock', value: formatQuantity(stock.closing, tracking.baseUnit), color: 'from-emerald-500 to-sky-500', text: 'text-emerald-700 dark:text-emerald-300' },
                 {
                   label: 'Movement',
-                  value: movement >= 0 ? `+${movement}` : `${movement}`,
+                  value: `${movement >= 0 ? '+' : ''}${formatQuantity(movement, tracking.baseUnit)}`,
                   color: movement < 0 ? 'from-rose-500 to-orange-400' : 'from-emerald-500 to-teal-500',
                   text: movement < 0 ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300',
                 },

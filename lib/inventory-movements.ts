@@ -1,16 +1,17 @@
 import { api } from './api';
+import { baseUnits, type BaseUnit } from './product-quantity';
 
 export const movementTypes = { OPENING_BALANCE: 'Opening balance', PURCHASE_RECEIPT: 'Purchase receipt', SALE: 'Sale', CUSTOMER_RETURN: 'Customer return', SUPPLIER_RETURN: 'Supplier return', ADJUSTMENT: 'Adjustment' };
 export const stockStatuses = { in_stock: 'In stock', sold: 'Sold', damaged: 'Damaged', returned: 'Returned' };
 export interface InventoryMovement {
-  id: number; inventoryItemId: number; productId: number; productName: string; barcode: string;
+  id: number; inventoryItemId: number | null; productId: number; productName: string; barcode: string | null; baseUnit: BaseUnit;
   type: keyof typeof movementTypes; quantityDelta: number;
   fromStatus: keyof typeof stockStatuses | null; toStatus: keyof typeof stockStatuses;
   referenceType: 'INVENTORY_LOT' | 'SALES_RECORD' | 'INVENTORY_RETURN' | 'MANUAL_ADJUSTMENT' | 'MIGRATION';
   referenceId: number | null; sourceDocumentNumber: string | null;
   unitCost: number | null; reason: string | null; notes: string | null; actorId: number | null; actorName: string | null; occurredAt: string;
 }
-export interface MovementPage { items: InventoryMovement[]; page: number; limit: number; total: number; netQuantityDelta: number }
+export interface MovementPage { items: InventoryMovement[]; page: number; limit: number; total: number; netQuantityDelta: number | null; netQuantityByUnit: Partial<Record<BaseUnit, number>> }
 export interface MovementFilters { productId: string; type: string; toStatus: string; from: string; to: string; inventoryItemId?: number }
 export const emptyMovementFilters: MovementFilters = { productId: '', type: '', toStatus: '', from: '', to: '' };
 
@@ -23,12 +24,12 @@ export function movementQuery(filters: MovementFilters, page: number) {
 }
 export async function getInventoryMovements(filters: MovementFilters, page: number) {
   const response = await api.get<MovementPage>('/inventory/movements', movementQuery(filters, page));
-  if (!response || !Array.isArray(response.items) || !Number.isInteger(response.total) || response.total < 0 || response.page !== page || !Number.isInteger(response.limit) || response.limit <= 0 || !Number.isFinite(response.netQuantityDelta)) throw new Error('Unable to read the movement ledger. Please try again.');
+  if (!response || !Array.isArray(response.items) || !Number.isInteger(response.total) || response.total < 0 || response.page !== page || !Number.isInteger(response.limit) || response.limit <= 0 || (response.netQuantityDelta !== null && !Number.isFinite(response.netQuantityDelta)) || !response.netQuantityByUnit || typeof response.netQuantityByUnit !== 'object' || Array.isArray(response.netQuantityByUnit) || Object.entries(response.netQuantityByUnit).some(([unit, value]) => !baseUnits.includes(unit as BaseUnit) || !Number.isFinite(value))) throw new Error('Unable to read the movement ledger. Please try again.');
   return response;
 }
 export function movementSourceLink(row: InventoryMovement): string | undefined {
   if (row.referenceType === 'SALES_RECORD' && row.referenceId) return `/dashboard/sales/records/${row.referenceId}`;
-  if (row.referenceType === 'INVENTORY_LOT' && row.sourceDocumentNumber) return `/dashboard/inventory/list?lotNumber=${encodeURIComponent(row.sourceDocumentNumber)}`;
+  if (row.referenceType === 'INVENTORY_LOT' && row.inventoryItemId !== null && row.sourceDocumentNumber) return `/dashboard/inventory/list?lotNumber=${encodeURIComponent(row.sourceDocumentNumber)}`;
 }
 export function movementSourceLabel(row: InventoryMovement) {
   return row.sourceDocumentNumber ?? (row.referenceType === 'MANUAL_ADJUSTMENT' ? 'Manual adjustment' : row.referenceType === 'MIGRATION' ? 'Opening migration' : `${row.referenceType.replaceAll('_', ' ').toLowerCase()}${row.referenceId ? ` #${row.referenceId}` : ''}`);

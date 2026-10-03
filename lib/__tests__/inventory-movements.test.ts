@@ -2,6 +2,12 @@ import { api } from '../api';
 import { emptyMovementFilters, getInventoryMovements, movementDelta, movementQuery, movementSourceLink, type InventoryMovement } from '../inventory-movements';
 
 afterEach(() => jest.restoreAllMocks());
+it('accepts a null aggregate when movements have mixed units', async () => {
+  jest.spyOn(api, 'get').mockResolvedValue({ items: [], page: 1, limit: 20, total: 2, netQuantityDelta: null, netQuantityByUnit: { kg: -2.5, piece: -1 } });
+  const data = await getInventoryMovements(emptyMovementFilters, 1);
+  expect(data.netQuantityDelta).toBeNull();
+  expect(data.netQuantityByUnit).toEqual({ kg: -2.5, piece: -1 });
+});
 it('builds optional filters and local whole-day boundaries', () => {
   const query = movementQuery({ ...emptyMovementFilters, productId: '4', from: '2026-09-01', to: '2026-09-02' }, 2);
   expect(query).toMatchObject({ page: 2, limit: 20, productId: 4, type: undefined });
@@ -10,7 +16,7 @@ it('builds optional filters and local whole-day boundaries', () => {
   expect(() => movementQuery({ ...emptyMovementFilters, from: '2026-09-03', to: '2026-09-02' }, 1)).toThrow(/Start date/);
 });
 it('keeps the server total delta rather than summing the current page', async () => {
-  jest.spyOn(api, 'get').mockResolvedValue({ items: [], page: 1, limit: 20, total: 40, netQuantityDelta: -12 });
+  jest.spyOn(api, 'get').mockResolvedValue({ items: [], page: 1, limit: 20, total: 40, netQuantityDelta: -12, netQuantityByUnit: { piece: -12 } });
   expect((await getInventoryMovements(emptyMovementFilters, 1)).netQuantityDelta).toBe(-12);
 });
 it('links only supported destinations and labels status-only movements', () => {

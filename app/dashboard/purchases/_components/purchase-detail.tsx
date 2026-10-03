@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { canReceive, purchasesApi, purchaseProgress, remainingQuantity, formatAmount, formatPurchaseDate, purchaseError, uncertainMutation, type PurchaseOrder } from '@/lib/purchases';
+import { canReceive, purchasesApi, remainingQuantity, formatAmount, formatPurchaseDate, purchaseError, uncertainMutation, type PurchaseOrder } from '@/lib/purchases';
 import { usePurchaseResource } from './use-purchase-resource';
 import PurchaseHistory from './purchase-history';
 import { PurchaseShell, PurchaseBadge, PurchaseError, PurchaseLoading, purchaseButton, purchaseSecondary, purchaseInput, purchaseCard } from './purchase-ui';
+import { formatQuantity } from '@/lib/product-quantity';
 
 export default function PurchaseDetail({ id }: { id: number }) {
   const load = useCallback(() => purchasesApi.get(id), [id]);
@@ -18,7 +19,6 @@ function PurchaseDetailContent({ order, reload }: { order: PurchaseOrder; reload
   const [action, setAction] = useState<'confirm' | 'cancel' | null>(null);
   const [notice, setNotice] = useState('');
   const [reviewRequired, setReviewRequired] = useState(false);
-  const progress = purchaseProgress(order);
   return <PurchaseShell title={order.orderNumber} description={order.supplier.name} order={{ id: order.id, label: order.orderNumber }} actions={<>
     {reviewRequired ? <button className={purchaseSecondary} onClick={reload}>Reload order</button> : <>
       {order.status === 'DRAFT' && <><Link className={purchaseSecondary} href={`/dashboard/purchases/${order.id}/edit`}>Edit Draft</Link><button className={purchaseButton} onClick={() => setAction('confirm')}>Confirm Order</button></>}
@@ -43,14 +43,14 @@ function PurchaseDetailContent({ order, reload }: { order: PurchaseOrder; reload
       }} className={`pb-3 text-sm font-semibold ${tab === value ? 'border-b-2 border-sky-600 text-sky-700 dark:text-sky-400' : 'text-slate-500'}`}>{value === 'items' ? 'Items' : 'Receipt History'}</button>)}
     </div>
     <section role="tabpanel" id={`purchase-panel-${tab}`} aria-labelledby={`purchase-tab-${tab}`} tabIndex={0}>
-    {tab === 'receipts' ? <PurchaseHistory key={order.id} orderId={order.id} /> : <section className={purchaseCard} aria-label="Order items">
-      <div className="mb-4 flex flex-wrap justify-between gap-2"><h2 className="font-semibold">Items</h2><p className="text-sm text-slate-500">{progress.received} of {progress.ordered} units received</p></div>
+    {tab === 'receipts' ? <PurchaseHistory key={order.id} order={order} /> : <section className={purchaseCard} aria-label="Order items">
+      <div className="mb-4 flex flex-wrap justify-between gap-2"><h2 className="font-semibold">Items</h2><p className="text-sm text-slate-500">{order.lines.filter(line => remainingQuantity(line) === 0).length} of {order.lines.length} product lines fully received</p></div>
       <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b border-slate-200 text-xs uppercase text-slate-500 dark:border-slate-700"><tr>{['Product', 'Ordered', 'Received', 'Remaining', 'Unit cost', 'Line total'].map(label => <th key={label} className="px-3 py-3">{label}</th>)}</tr></thead>
         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{order.lines.map(line => <tr key={line.id}>
           <td className="px-3 py-4"><p className="font-medium">{line.product.name}</p>{line.product.sku && <p className="text-xs text-slate-500">{line.product.sku}</p>}{line.notes && <p className="mt-1 max-w-xs whitespace-pre-wrap break-words text-xs text-slate-500">{line.notes}</p>}</td>
-          <td className="px-3 py-4">{line.quantity}</td><td className="px-3 py-4">{line.receivedQuantity}</td><td className="px-3 py-4">{remainingQuantity(line)}</td><td className="px-3 py-4 tabular-nums">{formatAmount(line.unitCost)}</td><td className="px-3 py-4 tabular-nums">{formatAmount(line.lineTotal)}</td>
+          <td className="px-3 py-4">{formatQuantity(line.quantity, line.product.baseUnit)}</td><td className="px-3 py-4">{formatQuantity(line.receivedQuantity, line.product.baseUnit)}</td><td className="px-3 py-4">{formatQuantity(remainingQuantity(line), line.product.baseUnit)}</td><td className="px-3 py-4 tabular-nums">{formatAmount(line.unitCost)} / {line.product.baseUnit}</td><td className="px-3 py-4 tabular-nums">{formatAmount(line.lineTotal)}</td>
         </tr>)}</tbody></table></div>
-      <p className="mt-4 text-sm font-medium">{order.status === 'CANCELLED' ? 'This order is cancelled. No further stock can be received.' : `${Math.max(0, progress.ordered - progress.received)} units outstanding`}</p>
+      <p className="mt-4 text-sm font-medium">{order.status === 'CANCELLED' ? 'This order is cancelled. No further stock can be received.' : `${order.lines.filter(line => remainingQuantity(line) > 0).length} product lines outstanding`}</p>
     </section>}
     </section>
     {order.notes && <section className={purchaseCard}><h2 className="mb-2 font-semibold">Order notes</h2><p className="whitespace-pre-wrap break-words text-sm">{order.notes}</p></section>}

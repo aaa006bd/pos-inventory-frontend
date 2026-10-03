@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useState, type FormEvent } from 'react';
-import { purchasesApi, getPurchaseSuppliers, purchaseStatuses, purchaseStatusLabels, purchaseProgress, formatAmount, formatPurchaseDate, type PurchaseListQuery, type PurchaseStatus } from '@/lib/purchases';
+import { purchasesApi, getPurchaseSuppliers, purchaseStatuses, purchaseStatusLabels, remainingQuantity, formatAmount, formatPurchaseDate, type PurchaseListQuery, type PurchaseStatus } from '@/lib/purchases';
 import { usePurchaseResource } from './_components/use-purchase-resource';
 import { PurchaseShell, PurchaseLoading, PurchaseError, PurchaseBadge, purchaseButton, purchaseSecondary, purchaseInput, purchaseCard } from './_components/purchase-ui';
 
@@ -33,8 +33,8 @@ export default function PurchaseOrdersPage() {
         {!orders.data.items.length ? <div className="py-12 text-center"><h2 className="font-semibold">No purchase orders found</h2><p className="mt-2 text-sm text-slate-500">Create an order or change your filters.</p></div> : <table className="w-full text-left text-sm">
           <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-700"><tr>{['Order', 'Supplier', 'Date', 'Status', 'Received', 'Total'].map(label => <th key={label} className="px-3 py-3">{label}</th>)}</tr></thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{orders.data.items.map(order => {
-            const progress = purchaseProgress(order);
-            return <tr key={order.id} className="hover:bg-slate-50 dark:hover:bg-slate-800"><td className="px-3 py-4"><Link href={`/dashboard/purchases/${order.id}`} className="font-semibold text-sky-700 underline-offset-4 hover:underline dark:text-sky-400">{order.orderNumber}</Link></td><td className="px-3 py-4">{order.supplier.name}</td><td className="whitespace-nowrap px-3 py-4">{formatPurchaseDate(order.orderDate)}</td><td className="px-3 py-4"><PurchaseBadge status={order.status} /></td><td className="whitespace-nowrap px-3 py-4">{progress.received} / {progress.ordered}</td><td className="px-3 py-4 tabular-nums">{formatAmount(order.totalAmount)}</td></tr>;
+            const completedLines = order.lines.filter(line => remainingQuantity(line) === 0).length;
+            return <tr key={order.id} className="hover:bg-slate-50 dark:hover:bg-slate-800"><td className="px-3 py-4"><Link href={`/dashboard/purchases/${order.id}`} className="font-semibold text-sky-700 underline-offset-4 hover:underline dark:text-sky-400">{order.orderNumber}</Link></td><td className="px-3 py-4">{order.supplier.name}</td><td className="whitespace-nowrap px-3 py-4">{formatPurchaseDate(order.orderDate)}</td><td className="px-3 py-4"><PurchaseBadge status={order.status} /></td><td className="whitespace-nowrap px-3 py-4">{completedLines} / {order.lines.length} lines</td><td className="px-3 py-4 tabular-nums">{formatAmount(order.totalAmount)}</td></tr>;
           })}</tbody>
         </table>}
       </div>
