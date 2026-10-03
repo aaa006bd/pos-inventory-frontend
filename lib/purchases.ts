@@ -1,4 +1,5 @@
 import { api, ApiError, type Product, type Supplier, type PaginatedResponse } from './api';
+import { serializedTracking, validProductQuantity, type ProductTracking } from './product-quantity';
 
 export const purchaseStatuses = ['DRAFT', 'CONFIRMED', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CANCELLED'] as const;
 export type PurchaseStatus = typeof purchaseStatuses[number];
@@ -9,7 +10,7 @@ export const purchaseStatusLabels: Record<PurchaseStatus, string> = {
 export interface PurchaseLine {
   id: number;
   productId: number;
-  product: { id: number; name: string; sku?: string | null };
+  product: { id: number; name: string; sku?: string | null } & ProductTracking;
   quantity: number;
   receivedQuantity: number;
   unitCost: number | string;
@@ -128,12 +129,14 @@ export function purchaseProgress(order: PurchaseOrder) {
   return order.lines.reduce((total, line) => ({ ordered: total.ordered + Number(line.quantity), received: total.received + Number(line.receivedQuantity) }), { ordered: 0, received: 0 });
 }
 
-export function validateDraft(draft: PurchaseDraft): string | null {
+export function validateDraft(draft: PurchaseDraft, products?: Product[]): string | null {
   if (!Number.isInteger(draft.supplierId) || draft.supplierId < 1) return 'Select a supplier.';
   if (!draft.items.length) return 'Add at least one product.';
   for (const item of draft.items) {
     if (!Number.isInteger(item.productId) || item.productId < 1) return 'Select a product for every line.';
-    if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 10000) return 'Each quantity must be a whole number between 1 and 10,000.';
+    const product = products?.find(product => product.id === item.productId);
+    const tracking = product?.trackingMode ? product as Product & ProductTracking : serializedTracking;
+    if (!validProductQuantity(item.quantity, tracking) || item.quantity > 10000) return product ? `Enter a valid ${product.baseUnit ?? 'piece'} quantity for ${product.name}.` : 'Each quantity must be a whole number between 1 and 10,000.';
     if (!Number.isFinite(item.unitCost) || item.unitCost < 0.01) return 'Each unit cost must be at least 0.01.';
     if ((item.notes?.length ?? 0) > 1000) return 'Line notes must be 1,000 characters or fewer.';
   }
@@ -149,7 +152,8 @@ export function validateReceipt(order: PurchaseOrder, input: PurchaseReceiptInpu
     const line = order.lines.find(line => line.id === item.purchaseOrderLineId);
     if (!line || seen.has(item.purchaseOrderLineId)) return 'Each receipt line must refer to a different line on this order.';
     seen.add(item.purchaseOrderLineId);
-    if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 10000) return 'Receiving quantities must be whole numbers between 1 and 10,000.';
+    const tracking = line.product.trackingMode ? line.product : serializedTracking;
+    if (!validProductQuantity(item.quantity, tracking) || item.quantity > 10000) return `Enter a valid ${tracking.baseUnit} quantity for ${line.product.name}.`;
     if (item.quantity > remainingQuantity(line)) return `Cannot receive more than ${remainingQuantity(line)} outstanding units of ${line.product.name}.`;
     if ((item.lotNumber?.length ?? 0) > 100) return 'Lot numbers must be 100 characters or fewer.';
     if ((item.notes?.length ?? 0) > 1000) return 'Receipt notes must be 1,000 characters or fewer.';

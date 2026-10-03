@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { realApi, Product } from '@/lib/api';
+import { Product } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import DailyStockTab from '@/app/components/DailyStockTab';
+import { getPurchaseCatalog } from '@/lib/purchases';
 
 export default function InventoryDailyStockPage() {
   const { token } = useAuth();
@@ -19,9 +20,9 @@ export default function InventoryDailyStockPage() {
     if (!token) return;
 
     let active = true;
-    realApi.getProducts()
+    getPurchaseCatalog()
       .then((response) => {
-        if (active) setProducts(response.data || response);
+        if (active) setProducts(response);
       })
       .catch(console.error);
 

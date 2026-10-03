@@ -12,7 +12,7 @@ const order: PurchaseOrder = {
   id: 25, tenantId: 3, orderNumber: 'PO-25', supplierId: 7, supplier: { id: 7, name: 'Supplier One' },
   status: 'DRAFT', orderDate: '2026-09-07', totalAmount: 20,
   createdAt: '2026-09-07', updatedAt: '2026-09-07',
-  lines: [{ id: 101, productId: 42, product: { id: 42, name: 'Shirt' }, quantity: 2, receivedQuantity: 0, unitCost: 10, lineTotal: 20 }],
+  lines: [{ id: 101, productId: 42, product: { id: 42, name: 'Shirt', trackingMode: 'SERIALIZED', baseUnit: 'piece', quantityPrecision: 0 }, quantity: 2, receivedQuantity: 0, unitCost: 10, lineTotal: 20 }],
 };
 
 describe('purchase draft entry', () => {
@@ -36,6 +36,22 @@ describe('purchase draft entry', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
     await waitFor(() => expect(push).toHaveBeenCalledWith('/dashboard/purchases/25'));
     expect(create).toHaveBeenCalledWith({ supplierId: 7, expectedDeliveryDate: undefined, notes: '', items: [{ productId: 42, quantity: 2, unitCost: 10, notes: undefined }] });
+  });
+
+  it('allows decimal quantities at the product precision', async () => {
+    jest.spyOn(api, 'get').mockImplementation(async path => {
+      if (path === '/products') return { data: [{ id: 43, name: 'Rice', active: true, trackingMode: 'QUANTITY', baseUnit: 'kg', quantityPrecision: 2 }], total: 1, page: 1, limit: 100 };
+      if (path === '/suppliers') return [{ id: 7, name: 'Supplier One', active: true }];
+      throw new Error('Unexpected GET');
+    });
+    const create = jest.spyOn(purchasesApi, 'create').mockResolvedValue({ id: 26 } as never);
+    render(<PurchaseDraftPage />);
+    fireEvent.change(await screen.findByLabelText('Supplier *'), { target: { value: '7' } });
+    fireEvent.change(screen.getByLabelText('Product *'), { target: { value: '43' } });
+    fireEvent.change(screen.getByLabelText('Quantity *'), { target: { value: '2.5' } });
+    fireEvent.change(screen.getByLabelText('Unit cost *'), { target: { value: '80' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+    await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({ items: [{ productId: 43, quantity: 2.5, unitCost: 80, notes: undefined }] })));
   });
 
   it('locks direct edit routes after confirmation', async () => {

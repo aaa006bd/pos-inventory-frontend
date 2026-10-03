@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { realApi } from '@/lib/api';
+import { realApi, type SupplierReturnInput } from '@/lib/api';
+import { useDurableInventoryMutation } from './useDurableInventoryMutation';
 
 type ReturnMode = 'single' | 'batch' | 'lot';
 
@@ -143,27 +144,17 @@ function SingleItemForm({ onSuccess, showMessage }: AdjustTabProps) {
   const [lotNumber, setLotNumber] = useState('');
   const [notes, setNotes] = useState('');
   const [itemNotes, setItemNotes] = useState('');
-  const [loading, setLoading] = useState(false);
+  const mutation = useDurableInventoryMutation<SupplierReturnInput, unknown>('supplier-return-single', (payload, key) => realApi.createReturn(payload, key), () => { showMessage('success', `Item ${barcode} returned successfully`); setBarcode(''); setLotNumber(''); setNotes(''); setItemNotes(''); onSuccess(); });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!barcode.trim()) return;
-    setLoading(true);
-    try {
-      await realApi.createReturn({
+    mutation.run({
         type: 'supplier_return',
         ...(lotNumber.trim() && { lotNumber: lotNumber.trim() }),
         items: [{ barcode: barcode.trim(), ...(itemNotes.trim() && { notes: itemNotes.trim() }) }],
         ...(notes.trim() && { notes: notes.trim() }),
       });
-      showMessage('success', `Item ${barcode} returned successfully`);
-      setBarcode(''); setLotNumber(''); setNotes(''); setItemNotes('');
-      onSuccess();
-    } catch (err) {
-      showMessage('error', err instanceof Error ? err.message : 'Return failed');
-    } finally {
-      setLoading(false);
-    }
   };
 
   return (
@@ -214,7 +205,9 @@ function SingleItemForm({ onSuccess, showMessage }: AdjustTabProps) {
         />
       </div>
 
-      <SubmitButton loading={loading} disabled={!barcode.trim()} label="Submit Return" />
+      {mutation.error && <p role="alert" className="text-sm text-rose-600">{mutation.error}</p>}
+      {mutation.pending && <button type="button" onClick={mutation.retry} disabled={mutation.busy} className="rounded-xl border px-4 py-2 text-sm font-semibold">Retry saved return</button>}
+      <SubmitButton loading={mutation.busy} disabled={!mutation.ready || !!mutation.pending || !barcode.trim()} label="Submit Return" />
     </form>
   );
 }
@@ -224,10 +217,10 @@ function SingleItemForm({ onSuccess, showMessage }: AdjustTabProps) {
 interface BatchRow { id: number; barcode: string; notes: string }
 
 function BatchItemsForm({ onSuccess, showMessage }: AdjustTabProps) {
-  const [rows, setRows] = useState<BatchRow[]>([{ id: Date.now(), barcode: '', notes: '' }]);
+  const [rows, setRows] = useState<BatchRow[]>([{ id: 1, barcode: '', notes: '' }]);
   const [lotNumber, setLotNumber] = useState('');
   const [notes, setNotes] = useState('');
-  const [loading, setLoading] = useState(false);
+  const mutation = useDurableInventoryMutation<SupplierReturnInput, unknown>('supplier-return-batch', (payload, key) => realApi.createReturn(payload, key), () => { showMessage('success', 'Items returned successfully'); setRows([{ id: Date.now(), barcode: '', notes: '' }]); setLotNumber(''); setNotes(''); onSuccess(); });
 
   const updateRow = (id: number, field: keyof Omit<BatchRow, 'id'>, value: string) =>
     setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
@@ -239,23 +232,12 @@ function BatchItemsForm({ onSuccess, showMessage }: AdjustTabProps) {
     e.preventDefault();
     const validItems = rows.filter(r => r.barcode.trim());
     if (validItems.length === 0) return;
-    setLoading(true);
-    try {
-      await realApi.createReturn({
+    mutation.run({
         type: 'supplier_return',
         ...(lotNumber.trim() && { lotNumber: lotNumber.trim() }),
         items: validItems.map(r => ({ barcode: r.barcode.trim(), ...(r.notes.trim() && { notes: r.notes.trim() }) })),
         ...(notes.trim() && { notes: notes.trim() }),
       });
-      showMessage('success', `${validItems.length} item${validItems.length > 1 ? 's' : ''} returned successfully`);
-      setRows([{ id: Date.now(), barcode: '', notes: '' }]);
-      setLotNumber(''); setNotes('');
-      onSuccess();
-    } catch (err) {
-      showMessage('error', err instanceof Error ? err.message : 'Return failed');
-    } finally {
-      setLoading(false);
-    }
   };
 
   const hasAnyBarcode = rows.some(r => r.barcode.trim());
@@ -331,7 +313,9 @@ function BatchItemsForm({ onSuccess, showMessage }: AdjustTabProps) {
         />
       </div>
 
-      <SubmitButton loading={loading} disabled={!hasAnyBarcode} label={`Return ${rows.filter(r => r.barcode.trim()).length || ''} Item${rows.filter(r => r.barcode.trim()).length !== 1 ? 's' : ''}`} />
+      {mutation.error && <p role="alert" className="text-sm text-rose-600">{mutation.error}</p>}
+      {mutation.pending && <button type="button" onClick={mutation.retry} disabled={mutation.busy} className="rounded-xl border px-4 py-2 text-sm font-semibold">Retry saved return</button>}
+      <SubmitButton loading={mutation.busy} disabled={!mutation.ready || !!mutation.pending || !hasAnyBarcode} label={`Return ${rows.filter(r => r.barcode.trim()).length || ''} Item${rows.filter(r => r.barcode.trim()).length !== 1 ? 's' : ''}`} />
     </form>
   );
 }
@@ -341,26 +325,16 @@ function BatchItemsForm({ onSuccess, showMessage }: AdjustTabProps) {
 function LotReturnForm({ onSuccess, showMessage }: AdjustTabProps) {
   const [lotNumber, setLotNumber] = useState('');
   const [notes, setNotes] = useState('');
-  const [loading, setLoading] = useState(false);
+  const mutation = useDurableInventoryMutation<SupplierReturnInput, unknown>('supplier-return-lot', (payload, key) => realApi.createReturn(payload, key), () => { showMessage('success', `Lot ${lotNumber} returned successfully`); setLotNumber(''); setNotes(''); onSuccess(); });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!lotNumber.trim()) return;
-    setLoading(true);
-    try {
-      await realApi.createReturn({
+    mutation.run({
         type: 'supplier_return',
         lotNumber: lotNumber.trim(),
         ...(notes.trim() && { notes: notes.trim() }),
       });
-      showMessage('success', `Lot ${lotNumber} returned successfully`);
-      setLotNumber(''); setNotes('');
-      onSuccess();
-    } catch (err) {
-      showMessage('error', err instanceof Error ? err.message : 'Return failed');
-    } finally {
-      setLoading(false);
-    }
   };
 
   return (
@@ -391,7 +365,9 @@ function LotReturnForm({ onSuccess, showMessage }: AdjustTabProps) {
         />
       </div>
 
-      <SubmitButton loading={loading} disabled={!lotNumber.trim()} label="Return Entire Lot" danger />
+      {mutation.error && <p role="alert" className="text-sm text-rose-600">{mutation.error}</p>}
+      {mutation.pending && <button type="button" onClick={mutation.retry} disabled={mutation.busy} className="rounded-xl border px-4 py-2 text-sm font-semibold">Retry saved return</button>}
+      <SubmitButton loading={mutation.busy} disabled={!mutation.ready || !!mutation.pending || !lotNumber.trim()} label="Return Entire Lot" danger />
     </form>
   );
 }
