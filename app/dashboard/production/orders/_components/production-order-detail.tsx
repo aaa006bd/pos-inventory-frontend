@@ -1,0 +1,23 @@
+'use client';
+
+import Link from 'next/link';
+import { useCallback } from 'react';
+import { productionApi, formatProductionAmount } from '@/lib/production';
+import { getPurchaseCatalog } from '@/lib/purchases';
+import { formatQuantity } from '@/lib/product-quantity';
+import { useSalesResource } from '../../../sales/orders/_components/use-sales-resource';
+import { ProductionShell, ProductionError, ProductionLoading, ProductionStatusBadge, productionButton, productionCard, productionSecondary } from '../../_components/production-ui';
+
+export default function ProductionOrderDetail({ id }: { id: number }) {
+  const order = useSalesResource(useCallback(() => productionApi.getOrder(id), [id])); const catalog = useSalesResource(getPurchaseCatalog);
+  if (order.loading) return <ProductionShell title={`Production Order PROD-${id}`}><ProductionLoading /></ProductionShell>;
+  if (order.error || !order.data) return <ProductionShell title={`Production Order PROD-${id}`}><ProductionError message={order.error ?? 'Production order unavailable.'} retry={order.reload} /></ProductionShell>;
+  const value = order.data; const products = catalog.data ?? []; const name = (productId: number) => products.find(product => product.id === productId)?.name ?? `Product #${productId}`;
+  return <ProductionShell title={`Production Order PROD-${value.id}`} description={name(value.outputProductId)} order={{ id: value.id, label: `PROD-${value.id}` }} actions={<>{value.status === 'PLANNED' && <Link className={productionButton} href={`/dashboard/production/orders/${value.id}/complete`}>Complete Production</Link>}<button className={productionSecondary} onClick={order.reload}>Refresh</button></>}>
+    {catalog.error && <ProductionError message="Product names could not be loaded. Product IDs are shown instead." retry={catalog.reload} />}
+    <section className={`${productionCard} grid gap-5 sm:grid-cols-2 lg:grid-cols-4`}><div><p className="text-xs uppercase text-slate-500">Status</p><div className="mt-2"><ProductionStatusBadge status={value.status} /></div></div><div><p className="text-xs uppercase text-slate-500">Definition version</p><Link className="mt-2 block font-semibold text-sky-700 hover:underline dark:text-sky-400" href={`/dashboard/production/definitions/${value.definitionId}`}>Version {value.definitionVersion}</Link></div><div><p className="text-xs uppercase text-slate-500">Planned output</p><p className="mt-2 font-semibold">{formatQuantity(value.plannedQuantity, value.outputUnit)}</p></div><div><p className="text-xs uppercase text-slate-500">Actual output</p><p className="mt-2 font-semibold">{value.actualQuantity == null ? 'Not completed' : formatQuantity(value.actualQuantity, value.outputUnit)}</p></div></section>
+    <section className={`${productionCard} overflow-x-auto`}><h2 className="mb-4 font-semibold">Materials</h2><table className="w-full text-left text-sm"><thead className="border-b text-xs uppercase text-slate-500 dark:border-slate-700"><tr>{['Material', 'Planned', 'Actual', 'Actual cost'].map(label => <th key={label} className="px-3 py-3">{label}</th>)}</tr></thead><tbody className="divide-y dark:divide-slate-700">{value.materials.map(material => <tr key={material.id}><td className="px-3 py-4">{name(material.productId)}</td><td className="px-3 py-4">{formatQuantity(material.plannedQuantity, material.baseUnit)}</td><td className="px-3 py-4">{material.actualQuantity == null ? '—' : formatQuantity(material.actualQuantity, material.baseUnit)}</td><td className="px-3 py-4 tabular-nums">{formatProductionAmount(material.actualCost)}</td></tr>)}</tbody></table></section>
+    <section className={`${productionCard} grid gap-5 sm:grid-cols-2`}><div><p className="text-xs uppercase text-slate-500">Total material cost</p><p className="mt-2 font-semibold tabular-nums">{formatProductionAmount(value.materialCost)}</p></div><div><p className="text-xs uppercase text-slate-500">Journal entry</p><p className="mt-2 font-semibold">{value.journalEntryId == null ? value.status === 'COMPLETED' ? 'None (zero-cost batch)' : 'Created on completion' : `Journal #${value.journalEntryId}`}</p></div>{value.notes && <div className="sm:col-span-2"><p className="text-xs uppercase text-slate-500">Notes</p><p className="mt-2 whitespace-pre-wrap text-sm">{value.notes}</p></div>}</section>
+    {value.status === 'PLANNED' && <p className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-200">No stock has changed yet. Completing this order will consume all reported materials and receive the finished quantity atomically.</p>}
+  </ProductionShell>;
+}
