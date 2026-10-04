@@ -1,0 +1,21 @@
+'use client';
+
+import Link from 'next/link';
+import { useCallback, useState } from 'react';
+import { productionApi, formatProductionAmount, type ProductionOrderStatus } from '@/lib/production';
+import { getPurchaseCatalog } from '@/lib/purchases';
+import { formatQuantity } from '@/lib/product-quantity';
+import { useSalesResource } from '../../sales/orders/_components/use-sales-resource';
+import { ProductionShell, ProductionError, ProductionLoading, ProductionStatusBadge, productionButton, productionCard, productionInput, productionSecondary } from '../_components/production-ui';
+
+export default function ProductionOrdersPage() {
+  const [page, setPage] = useState(1); const [status, setStatus] = useState<ProductionOrderStatus | ''>('');
+  const load = useCallback(() => productionApi.listOrders({ page, status: status || undefined }), [page, status]);
+  const orders = useSalesResource(load); const catalog = useSalesResource(getPurchaseCatalog); const products = catalog.data ?? [];
+  const name = (id: number) => products.find(product => product.id === id)?.name ?? `Product #${id}`;
+  return <ProductionShell title="Production Orders" description="Plan material requirements, record actual consumption, and receive finished stock." actions={<Link className={productionButton} href="/dashboard/production/orders/new">+ Plan Production</Link>}>
+    <div className={`${productionCard} flex flex-wrap items-end gap-3`}><label className="min-w-56 space-y-1 text-sm">Status<select className={productionInput} value={status} onChange={event => { setStatus(event.target.value as ProductionOrderStatus | ''); setPage(1); }}><option value="">All statuses</option><option value="PLANNED">Planned</option><option value="COMPLETED">Completed</option></select></label><button className={productionSecondary} onClick={orders.reload}>Refresh</button><Link className={productionSecondary} href="/dashboard/production/definitions">Manage recipes / BOM</Link></div>
+    {catalog.error && <ProductionError message="Product names could not be loaded. Orders remain available by product ID." retry={catalog.reload} />}
+    {orders.loading ? <ProductionLoading /> : orders.error ? <ProductionError message={orders.error} retry={orders.reload} /> : orders.data && <><section className={`${productionCard} overflow-x-auto`}>{!orders.data.items.length ? <div className="py-10 text-center"><h2 className="font-semibold">No production orders found</h2><p className="mt-2 text-sm text-slate-500">Plan production or change the status filter.</p></div> : <table className="w-full text-left text-sm"><thead className="border-b text-xs uppercase text-slate-500 dark:border-slate-700"><tr>{['Order', 'Finished product', 'Definition', 'Status', 'Planned', 'Actual', 'Material cost'].map(label => <th className="px-3 py-3" key={label}>{label}</th>)}</tr></thead><tbody className="divide-y dark:divide-slate-700">{orders.data.items.map(order => <tr key={order.id}><td className="px-3 py-4"><Link className="font-semibold text-sky-700 hover:underline dark:text-sky-400" href={`/dashboard/production/orders/${order.id}`}>PROD-{order.id}</Link></td><td className="px-3 py-4">{name(order.outputProductId)}</td><td className="px-3 py-4"><Link className="text-sky-700 hover:underline dark:text-sky-400" href={`/dashboard/production/definitions/${order.definitionId}`}>v{order.definitionVersion}</Link></td><td className="px-3 py-4"><ProductionStatusBadge status={order.status} /></td><td className="px-3 py-4">{formatQuantity(order.plannedQuantity, order.outputUnit)}</td><td className="px-3 py-4">{order.actualQuantity == null ? '—' : formatQuantity(order.actualQuantity, order.outputUnit)}</td><td className="px-3 py-4 tabular-nums">{formatProductionAmount(order.materialCost)}</td></tr>)}</tbody></table>}</section><div className="flex items-center justify-between text-sm text-slate-500"><span>{orders.data.total} orders · Page {orders.data.page} of {Math.max(1, Math.ceil(orders.data.total / orders.data.limit))}</span><div className="flex gap-2"><button className={productionSecondary} disabled={page <= 1} onClick={() => setPage(value => value - 1)}>Previous</button><button className={productionSecondary} disabled={page * orders.data.limit >= orders.data.total} onClick={() => setPage(value => value + 1)}>Next</button></div></div></>}
+  </ProductionShell>;
+}

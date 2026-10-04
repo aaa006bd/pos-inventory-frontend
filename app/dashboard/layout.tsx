@@ -34,6 +34,11 @@ const purchasingItems = [
   { href: '/dashboard/inventory/receive', label: 'Manual Stock Receipt', icon: 'receive' },
 ];
 
+const productionItems = [
+  { href: '/dashboard/production/orders', label: 'Production Orders', icon: 'inventory' },
+  { href: '/dashboard/production/definitions', label: 'Recipes / BOM', icon: 'folder' },
+];
+
 const icons: Record<string, ReactNode> = {
   home: (
     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -184,6 +189,12 @@ function SidebarContent({
                         );
                       })}
                     </ul>
+                  </details>
+                )}
+                {item.href === '/dashboard/inventory/adjust' && (
+                  <details open className="mb-2 rounded-xl border border-slate-200/70 dark:border-slate-700">
+                    <summary className="cursor-pointer px-3 py-3 text-sm font-semibold text-slate-800 dark:text-slate-200">Production</summary>
+                    <ul className="space-y-1 px-2 pb-2">{productionItems.map(productionItem => { const active = isItemActive(pathname, productionItem.href); return <li key={productionItem.href}><Link href={productionItem.href} onClick={onNavClick} aria-current={active ? 'page' : undefined} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${active ? 'bg-slate-950 text-white dark:bg-slate-700' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700/50'}`}><span className="shrink-0">{icons[productionItem.icon]}</span>{productionItem.label}</Link></li>; })}</ul>
                   </details>
                 )}
                 <Link
