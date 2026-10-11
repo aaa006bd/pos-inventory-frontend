@@ -5,6 +5,7 @@ const backendApiUrl = (
 ).replace(/\/$/, "");
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   experimental: {
     // Opt out locally when mounted-filesystem caches retain stale dev routes.
     turbopackFileSystemCacheForDev: process.env.DISABLE_TURBOPACK_FS_CACHE === "1" ? false : undefined,
