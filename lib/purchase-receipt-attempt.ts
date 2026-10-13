@@ -1,4 +1,5 @@
 import type { PurchaseOrder, PurchaseReceiptInput } from './purchases';
+import { createIdempotencyKey } from './idempotency-key';
 
 export interface ReceiptAttempt {
   version: 1;
@@ -33,7 +34,7 @@ export function createReceiptAttempt(order: OrderIdentity, input: PurchaseReceip
   if (readReceiptAttempt(order)) throw new Error('A receipt is already pending. Reload this page to recover it.');
   const attempt: ReceiptAttempt = {
     version: 1, tenantId: order.tenantId, orderId: order.id,
-    key: crypto.randomUUID(), createdAt: Date.now(),
+    key: createIdempotencyKey(), createdAt: Date.now(),
     // Keep an immutable JSON snapshot: retries must not pick up edited quantities.
     input: JSON.parse(JSON.stringify(input)) as PurchaseReceiptInput,
   };

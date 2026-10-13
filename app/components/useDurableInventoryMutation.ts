@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/lib/api';
+import { createIdempotencyKey } from '@/lib/idempotency-key';
 
 type Attempt<T> = { version: 1; key: string; payload: T };
-const key = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
 
 export function useDurableInventoryMutation<TPayload, TResult>(scope: string, execute: (payload: TPayload, key: string) => Promise<TResult>, onSuccess?: (result: TResult) => void) {
   const storageKey = `inventory-operation:${scope}`;
@@ -41,7 +41,7 @@ export function useDurableInventoryMutation<TPayload, TResult>(scope: string, ex
     } finally { lock.current = false; setBusy(false); }
   };
   return { ready, pending, result, error, busy,
-    run: (payload: TPayload) => { if (ready && !pending && !lock.current) void perform({ version: 1, key: key(), payload }); },
+    run: (payload: TPayload) => { if (ready && !pending && !lock.current) void perform({ version: 1, key: createIdempotencyKey(), payload }); },
     retry: () => { if (pending) void perform(pending); },
     reset: () => { if (!pending && !lock.current) { setResult(null); setError(''); } },
   };
