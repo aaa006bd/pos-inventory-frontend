@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { customerPaymentsApi, type CustomerPayment, type PaymentAction } from '@/lib/customer-payments';
+import { createIdempotencyKey } from '@/lib/idempotency-key';
 
 type Attempt = { key: string; action: PaymentAction };
 
@@ -47,7 +48,7 @@ export function usePaymentAction(scope: string) {
     } finally { lock.current = false; setBusy(false); }
   };
   return { ready, pending, result, error, busy,
-    run: (action: PaymentAction) => { if (ready && !pending && !lock.current) void execute({ key: Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join(''), action }); },
+    run: (action: PaymentAction) => { if (ready && !pending && !lock.current) void execute({ key: createIdempotencyKey(), action }); },
     retry: () => { if (pending) void execute(pending); },
     reset: () => { if (!pending && !lock.current) { setResult(null); setError(''); } },
   };

@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { realApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { Category } from '@/lib/api';
+import { getCatalogNameError, normalizeCatalogName } from '@/lib/catalog-name';
 
 interface CategoryFormData {
   name: string;
@@ -20,6 +22,11 @@ interface AttrFormData {
   required: boolean;
 }
 
+function ModalPortal({ children }: { children: React.ReactNode }) {
+  if (typeof document === 'undefined') return null;
+  return createPortal(children, document.body);
+}
+
 export default function CategoriesPage() {
   const { token, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -30,7 +37,7 @@ export default function CategoriesPage() {
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [formData, setFormData] = useState<CategoryFormData>({ name: '', description: '', parentId: '' });
-  const [attrData, setAttrData] = useState<AttrFormData>({ name: '', type: 'select', unit: '', options: [], required: true });
+  const [attrData, setAttrData] = useState<AttrFormData>({ name: '', type: '', unit: '', options: [], required: true });
   const [editingAttr, setEditingAttr] = useState<{ attr: { id: number; name: string; type: string; unit: string | null; options: string[]; required: boolean }; categoryId: number } | null>(null);
   const [optionInput, setOptionInput] = useState('');
   const optionInputRef = useRef<HTMLInputElement>(null);
@@ -132,11 +139,17 @@ export default function CategoriesPage() {
   const handleSubmitCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
+    const name = normalizeCatalogName(formData.name);
+    const nameError = getCatalogNameError(name, categories, 'Category', editingCategory?.id);
+    if (nameError) {
+      setFormError(nameError);
+      return;
+    }
     setSubmitting(true);
     try {
       const data: { name: string; description?: string; parentId?: number } = {
-        name: formData.name,
-        description: formData.description || undefined,
+        name,
+        description: formData.description.trim() || undefined,
       };
       if (formData.parentId) data.parentId = Number(formData.parentId);
 
@@ -189,7 +202,7 @@ export default function CategoriesPage() {
   const openCreateAttrModal = (cat: Category) => {
     setSelectedCategory(cat);
     setEditingAttr(null);
-    setAttrData({ name: '', type: 'select', unit: '', options: [], required: true });
+    setAttrData({ name: '', type: '', unit: '', options: [], required: true });
     setOptionInput('');
     setAttrError('');
     setShowAttrModal(true);
@@ -242,15 +255,30 @@ export default function CategoriesPage() {
     e.preventDefault();
     if (!selectedCategory) return;
     setAttrError('');
+    const name = normalizeCatalogName(attrData.name);
+    const nameError = getCatalogNameError(
+      name,
+      selectedCategory.attributes ?? [],
+      'Attribute',
+      editingAttr?.attr.id,
+    );
+    if (nameError) {
+      setAttrError(nameError);
+      return;
+    }
+    if (!attrData.type) {
+      setAttrError('Attribute type is required.');
+      return;
+    }
     setSubmitting(true);
     const finalOptions = optionInput.trim()
       ? [...attrData.options, optionInput.trim()].filter((v, i, a) => a.indexOf(v) === i)
       : attrData.options;
     try {
       const payload = {
-        name: attrData.name,
+        name,
         type: attrData.type.toLowerCase(),
-        unit: attrData.unit || undefined,
+        unit: attrData.unit.trim() || undefined,
         options: finalOptions,
         required: attrData.required,
       };
@@ -261,7 +289,7 @@ export default function CategoriesPage() {
       }
       setShowAttrModal(false);
       setEditingAttr(null);
-      setAttrData({ name: '', type: 'select', unit: '', options: [], required: true });
+      setAttrData({ name: '', type: '', unit: '', options: [], required: true });
       setOptionInput('');
       loadCategories();
     } catch (err) {
@@ -430,8 +458,9 @@ export default function CategoriesPage() {
 
       {/* Category modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-sm p-4" onClick={() => { setShowModal(false); setEditingCategory(null); }}>
-          <div className="w-full max-w-md rounded-[28px] border border-white/80 dark:border-slate-700/70 bg-white/95 dark:bg-slate-800/95 p-7 shadow-[0_30px_80px_-36px_rgba(15,23,42,0.40)] backdrop-blur" onClick={e => e.stopPropagation()}>
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-sm p-4" onClick={() => { setShowModal(false); setEditingCategory(null); }}>
+          <div role="dialog" aria-modal="true" aria-label={editingCategory ? 'Edit Category' : 'New Category'} className="w-full max-w-md rounded-[28px] border border-white/80 dark:border-slate-700/70 bg-white/95 dark:bg-slate-800/95 p-7 shadow-[0_30px_80px_-36px_rgba(15,23,42,0.40)] backdrop-blur" onClick={e => e.stopPropagation()}>
             <div className="mb-1.5 h-1 w-10 rounded-full bg-linear-to-r from-sky-500 to-orange-400" />
             <div className="mb-6">
               <div className="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300 mb-1">
@@ -446,11 +475,13 @@ export default function CategoriesPage() {
 
             <form onSubmit={handleSubmitCategory} className="space-y-4">
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Name *</label>
+                <label htmlFor="category-name" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Name *</label>
                 <input
+                  id="category-name"
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onBlur={() => setFormData((current) => ({ ...current, name: normalizeCatalogName(current.name) }))}
                   placeholder="e.g., Clothing"
                   required
                   autoFocus
@@ -458,8 +489,9 @@ export default function CategoriesPage() {
                 />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Description</label>
+                <label htmlFor="category-description" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Description</label>
                 <input
+                  id="category-description"
                   type="text"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -579,13 +611,15 @@ export default function CategoriesPage() {
               </div>
             </form>
           </div>
-        </div>
+          </div>
+        </ModalPortal>
       )}
 
       {/* Delete confirmation modal */}
       {deletingCategory && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-sm p-4" onClick={() => setDeletingCategory(null)}>
-          <div className="w-full max-w-sm rounded-[28px] border border-white/80 dark:border-slate-700/70 bg-white/95 dark:bg-slate-800/95 p-7 shadow-[0_30px_80px_-36px_rgba(15,23,42,0.40)] backdrop-blur" onClick={e => e.stopPropagation()}>
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-sm p-4" onClick={() => setDeletingCategory(null)}>
+          <div role="dialog" aria-modal="true" aria-label="Delete Category" className="w-full max-w-sm rounded-[28px] border border-white/80 dark:border-slate-700/70 bg-white/95 dark:bg-slate-800/95 p-7 shadow-[0_30px_80px_-36px_rgba(15,23,42,0.40)] backdrop-blur" onClick={e => e.stopPropagation()}>
             <div className="mb-1.5 h-1 w-10 rounded-full bg-rose-400" />
             <div className="mb-6">
               <div className="inline-flex items-center rounded-full bg-rose-50 dark:bg-rose-900/30 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-rose-600 dark:text-rose-400 mb-2">
@@ -627,13 +661,15 @@ export default function CategoriesPage() {
               </button>
             </div>
           </div>
-        </div>
+          </div>
+        </ModalPortal>
       )}
 
       {/* Delete attribute confirmation modal */}
       {deletingAttr && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-sm p-4" onClick={() => setDeletingAttr(null)}>
-          <div className="w-full max-w-sm rounded-[28px] border border-white/80 dark:border-slate-700/70 bg-white/95 dark:bg-slate-800/95 p-7 shadow-[0_30px_80px_-36px_rgba(15,23,42,0.40)] backdrop-blur" onClick={e => e.stopPropagation()}>
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-sm p-4" onClick={() => setDeletingAttr(null)}>
+          <div role="dialog" aria-modal="true" aria-label="Delete Attribute" className="w-full max-w-sm rounded-[28px] border border-white/80 dark:border-slate-700/70 bg-white/95 dark:bg-slate-800/95 p-7 shadow-[0_30px_80px_-36px_rgba(15,23,42,0.40)] backdrop-blur" onClick={e => e.stopPropagation()}>
             <div className="mb-1.5 h-1 w-10 rounded-full bg-rose-400" />
             <div className="mb-6">
               <div className="inline-flex items-center rounded-full bg-rose-50 dark:bg-rose-900/30 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-rose-600 dark:text-rose-400 mb-2">
@@ -675,13 +711,15 @@ export default function CategoriesPage() {
               </button>
             </div>
           </div>
-        </div>
+          </div>
+        </ModalPortal>
       )}
 
       {/* Attribute modal */}
       {showAttrModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-sm p-4" onClick={() => { setShowAttrModal(false); setEditingAttr(null); }}>
-          <div className="w-full max-w-md rounded-[28px] border border-white/80 dark:border-slate-700/70 bg-white/95 dark:bg-slate-800/95 p-7 shadow-[0_30px_80px_-36px_rgba(15,23,42,0.40)] backdrop-blur" onClick={e => e.stopPropagation()}>
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-sm p-4" onClick={() => { setShowAttrModal(false); setEditingAttr(null); }}>
+          <div role="dialog" aria-modal="true" aria-label={editingAttr ? 'Edit Attribute' : 'New Attribute'} className="w-full max-w-md rounded-[28px] border border-white/80 dark:border-slate-700/70 bg-white/95 dark:bg-slate-800/95 p-7 shadow-[0_30px_80px_-36px_rgba(15,23,42,0.40)] backdrop-blur" onClick={e => e.stopPropagation()}>
             <div className="mb-1.5 h-1 w-10 rounded-full bg-linear-to-r from-orange-400 to-sky-500" />
             <div className="mb-6">
               <div className="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300 mb-1">
@@ -698,11 +736,13 @@ export default function CategoriesPage() {
 
             <form onSubmit={handleSubmitAttribute} className="space-y-4">
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Name *</label>
+                <label htmlFor="attribute-name" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Name *</label>
                 <input
+                  id="attribute-name"
                   type="text"
                   value={attrData.name}
                   onChange={(e) => setAttrData({ ...attrData, name: e.target.value })}
+                  onBlur={() => setAttrData((current) => ({ ...current, name: normalizeCatalogName(current.name) }))}
                   placeholder="e.g., Size"
                   required
                   autoFocus
@@ -710,12 +750,15 @@ export default function CategoriesPage() {
                 />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Type</label>
+                <label htmlFor="attribute-type" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Type *</label>
                 <select
+                  id="attribute-type"
                   value={attrData.type}
                   onChange={(e) => setAttrData({ ...attrData, type: e.target.value })}
+                  required
                   className="w-full rounded-2xl border border-slate-200 dark:border-slate-600 bg-slate-50/70 dark:bg-slate-700/50 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-sky-400 dark:focus:border-sky-500 focus:bg-white dark:focus:bg-slate-700 focus:ring-4 focus:ring-sky-100 dark:focus:ring-sky-900/50"
                 >
+                  <option value="" disabled>Choose a type</option>
                   <option value="select">Select</option>
                   <option value="text">Text</option>
                   <option value="number">Number</option>
@@ -725,8 +768,9 @@ export default function CategoriesPage() {
                 </select>
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Unit <span className="font-normal text-slate-400 dark:text-slate-500">(optional)</span></label>
+                <label htmlFor="attribute-unit" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Unit <span className="font-normal text-slate-400 dark:text-slate-500">(optional)</span></label>
                 <input
+                  id="attribute-unit"
                   type="text"
                   value={attrData.unit}
                   onChange={(e) => setAttrData({ ...attrData, unit: e.target.value })}
@@ -812,7 +856,8 @@ export default function CategoriesPage() {
               </div>
             </form>
           </div>
-        </div>
+          </div>
+        </ModalPortal>
       )}
     </div>
   );
