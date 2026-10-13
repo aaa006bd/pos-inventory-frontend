@@ -44,3 +44,6 @@ coverage/
 
 # Misc
 *.log
+
+# Local QA artifacts
+bugs/
