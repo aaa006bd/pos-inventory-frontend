@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { realApi, type SupplierReturnInput } from '@/lib/api';
+import { useEffect, useState, useRef } from 'react';
+import { realApi, type Product, type SupplierReturnInput } from '@/lib/api';
 import { useDurableInventoryMutation } from './useDurableInventoryMutation';
+import { getPurchaseCatalog } from '@/lib/purchases';
+import { createQuantityAdjustment, validateQuantityAdjustment, type QuantityAdjustmentInput, type QuantityAdjustmentReason, type QuantityAdjustmentResult } from '@/lib/quantity-adjustments';
 
-type ReturnMode = 'single' | 'batch' | 'lot';
+type ReturnMode = 'quantity' | 'single' | 'batch' | 'lot';
 
 interface AdjustTabProps {
   onSuccess: () => void;
@@ -12,10 +14,88 @@ interface AdjustTabProps {
 }
 
 const MODES: { value: ReturnMode; label: string; description: string }[] = [
+  { value: 'quantity', label: 'Wastage', description: 'Adjust quantity stock with an audit trail' },
   { value: 'single', label: 'Single Item', description: 'Return one item by barcode' },
   { value: 'batch', label: 'Batch Items', description: 'Return multiple items at once' },
   { value: 'lot', label: 'Lot Return', description: 'Return an entire lot' },
 ];
+
+function QuantityAdjustmentForm({ onSuccess, showMessage }: AdjustTabProps) {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [productId, setProductId] = useState('');
+  const [quantity, setQuantity] = useState('');
+  const [reason, setReason] = useState<QuantityAdjustmentReason>('WASTAGE');
+  const [notes, setNotes] = useState('');
+  const [occurredAt, setOccurredAt] = useState('');
+  const [formError, setFormError] = useState('');
+  const selectedProduct = products.find(product => product.id === Number(productId));
+  const mutation = useDurableInventoryMutation<QuantityAdjustmentInput, QuantityAdjustmentResult>(
+    'quantity-adjustment',
+    createQuantityAdjustment,
+    result => {
+      showMessage('success', `${result.quantityDelta} ${result.baseUnit} adjusted. New balance: ${result.resultingBalance} ${result.baseUnit}.`);
+      setQuantity(''); setNotes(''); setOccurredAt(''); setFormError(''); onSuccess();
+    },
+  );
+
+  useEffect(() => {
+    void getPurchaseCatalog()
+      .then(catalog => setProducts(catalog.filter(product => product.active !== false && product.trackingMode === 'QUANTITY')))
+      .catch(cause => setFormError(cause instanceof Error ? cause.message : 'Unable to load quantity products.'))
+      .finally(() => setLoadingProducts(false));
+  }, []);
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const entered = Number(quantity);
+    const input: QuantityAdjustmentInput = {
+      productId: Number(productId),
+      quantityDelta: reason === 'WASTAGE' ? -Math.abs(entered) : entered,
+      reason,
+      notes: notes.trim(),
+      ...(occurredAt && { occurredAt: new Date(occurredAt).toISOString() }),
+    };
+    const error = validateQuantityAdjustment(input, selectedProduct);
+    if (error) { setFormError(error); return; }
+    setFormError('');
+    mutation.run(input);
+  };
+
+  const precision = selectedProduct?.quantityPrecision ?? 0;
+  return (
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <div className="rounded-2xl border border-amber-200 bg-amber-50/60 px-5 py-4 text-xs leading-5 text-amber-700 dark:border-amber-700/50 dark:bg-amber-900/10 dark:text-amber-300">
+        Wastage permanently reduces sellable stock. Every submission is recorded in Inventory Movements with your note and resulting balance.
+      </div>
+      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Product *
+        <select aria-label="Quantity product" value={productId} onChange={event => { setProductId(event.target.value); setFormError(''); }} disabled={loadingProducts} className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm dark:border-slate-600 dark:bg-slate-700/50">
+          <option value="">{loadingProducts ? 'Loading products…' : 'Select a quantity product…'}</option>
+          {products.map(product => <option key={product.id} value={product.id}>{product.name} · {product.baseUnit ?? 'piece'}</option>)}
+        </select>
+      </label>
+      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Reason *
+        <select aria-label="Adjustment reason" value={reason} onChange={event => { setReason(event.target.value as QuantityAdjustmentReason); setQuantity(''); setFormError(''); }} className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm dark:border-slate-600 dark:bg-slate-700/50">
+          <option value="WASTAGE">Wastage / spoilage</option>
+          <option value="MANUAL_CORRECTION">Manual stock correction</option>
+        </select>
+      </label>
+      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+        {reason === 'WASTAGE' ? 'Quantity discarded' : 'Quantity change'} ({selectedProduct?.baseUnit ?? 'unit'}) *
+        <input aria-label="Adjustment quantity" type="number" value={quantity} onChange={event => setQuantity(event.target.value)} step={10 ** -precision} min={reason === 'WASTAGE' ? 10 ** -precision : undefined} placeholder={reason === 'WASTAGE' ? 'Enter a positive amount' : 'Use a negative value to remove stock'} className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm dark:border-slate-600 dark:bg-slate-700/50" />
+      </label>
+      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Occurred at <span className="font-normal text-slate-400">(optional)</span>
+        <input aria-label="Occurred at" type="datetime-local" value={occurredAt} onChange={event => setOccurredAt(event.target.value)} className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm dark:border-slate-600 dark:bg-slate-700/50" />
+      </label>
+      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Audit note *
+        <textarea aria-label="Audit note" value={notes} onChange={event => setNotes(event.target.value)} maxLength={2000} rows={3} placeholder="What happened and why was stock adjusted?" className="mt-2 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm dark:border-slate-600 dark:bg-slate-700/50" />
+      </label>
+      {(formError || mutation.error) && <p role="alert" className="text-sm text-rose-600">{formError || mutation.error}</p>}
+      {mutation.pending && <button type="button" onClick={mutation.retry} disabled={mutation.busy} className="rounded-xl border px-4 py-2 text-sm font-semibold">Retry saved adjustment</button>}
+      <SubmitButton loading={mutation.busy} disabled={!mutation.ready || !!mutation.pending || loadingProducts} label={reason === 'WASTAGE' ? 'Record Wastage' : 'Record Correction'} danger={reason === 'WASTAGE'} />
+    </form>
+  );
+}
 
 // ── Lot Number Field with scan ────────────────────────────────────────────────
 
@@ -401,7 +481,7 @@ function SubmitButton({ loading, disabled, label, danger = false }: { loading: b
 // ── Root component ────────────────────────────────────────────────────────────
 
 export default function AdjustTab({ onSuccess, showMessage }: AdjustTabProps) {
-  const [mode, setMode] = useState<ReturnMode>('single');
+  const [mode, setMode] = useState<ReturnMode>('quantity');
 
   return (
     <div className="min-h-[calc(100vh-8rem)] bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.10),transparent_35%),radial-gradient(circle_at_bottom_left,rgba(249,115,22,0.08),transparent_30%),linear-gradient(160deg,#f8fafc_0%,#eef6ff_50%,#fff7ed_100%)] dark:bg-none dark:bg-slate-950 p-6">
@@ -414,12 +494,12 @@ export default function AdjustTab({ onSuccess, showMessage }: AdjustTabProps) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
             </svg>
           </span>
-          Inventory Returns
+          Inventory Adjustments
         </div>
 
         {/* Mode picker */}
         <div className="rounded-[28px] border border-white/80 dark:border-slate-700/70 bg-white/88 dark:bg-slate-800/90 p-2 shadow-[0_10px_35px_-22px_rgba(15,23,42,0.20)] backdrop-blur">
-          <div className="grid grid-cols-3 gap-1">
+          <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
             {MODES.map(m => (
               <button
                 key={m.value}
@@ -450,6 +530,7 @@ export default function AdjustTab({ onSuccess, showMessage }: AdjustTabProps) {
             </p>
           </div>
 
+          {mode === 'quantity' && <QuantityAdjustmentForm onSuccess={onSuccess} showMessage={showMessage} />}
           {mode === 'single' && <SingleItemForm onSuccess={onSuccess} showMessage={showMessage} />}
           {mode === 'batch'  && <BatchItemsForm  onSuccess={onSuccess} showMessage={showMessage} />}
           {mode === 'lot'    && <LotReturnForm   onSuccess={onSuccess} showMessage={showMessage} />}
