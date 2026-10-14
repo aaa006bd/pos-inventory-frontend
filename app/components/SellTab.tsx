@@ -6,6 +6,7 @@ import { realApi, type Customer, type InventoryItemWithProduct, type Product, ty
 import { getPurchaseCatalog } from '@/lib/purchases';
 import { formatQuantity, validProductQuantity } from '@/lib/product-quantity';
 import { useDurableInventoryMutation } from './useDurableInventoryMutation';
+import { checkoutQuantitySummary } from '@/lib/checkout-summary';
 
 type CartLine =
   | { key: string; kind: 'SERIALIZED'; item: InventoryItemWithProduct; product: Product; quantity: 1; salePrice: string; discountAmount: string; notes: string }
@@ -164,7 +165,7 @@ export default function SellTab({ showMessage }: { showMessage: (type: 'success'
           )}
         </section>
 
-        {operation.result && <div role="status" className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 shadow-sm dark:border-emerald-700/50 dark:bg-emerald-900/20 dark:text-emerald-200"><p>Sale <strong>{operation.result.salesRecord.saleNumber}</strong> completed. The cart is ready for the next checkout.</p><p>Backend total: {Number(operation.result.salesRecord.netAmount).toFixed(2)} · {operation.result.soldItems.length} serialized units sold.</p><div className="flex gap-2"><Link className="flex-1 rounded-xl bg-emerald-700 px-3 py-2 text-center text-xs font-semibold text-white" href={`/dashboard/sales/records/${operation.result.salesRecord.id}`}>View sale</Link><button type="button" className="flex-1 rounded-xl border border-emerald-300 bg-white/70 px-3 py-2 text-xs font-semibold text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200" onClick={finish}>Dismiss</button></div></div>}
+        {operation.result && <div role="status" className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 shadow-sm dark:border-emerald-700/50 dark:bg-emerald-900/20 dark:text-emerald-200"><p>Sale <strong>{operation.result.salesRecord.saleNumber}</strong> completed. The cart is ready for the next checkout.</p><p>Backend total: {Number(operation.result.salesRecord.netAmount).toFixed(2)} · {checkoutQuantitySummary(operation.result.salesRecord.lines, operation.result.soldItems.length)}</p><div className="flex gap-2"><Link className="flex-1 rounded-xl bg-emerald-700 px-3 py-2 text-center text-xs font-semibold text-white" href={`/dashboard/sales/records/${operation.result.salesRecord.id}`}>View sale</Link><button type="button" className="flex-1 rounded-xl border border-emerald-300 bg-white/70 px-3 py-2 text-xs font-semibold text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200" onClick={finish}>Dismiss</button></div></div>}
 
         {cart.length === 0 ? (
           <section className={`${cardClass} py-12 text-center`}>
