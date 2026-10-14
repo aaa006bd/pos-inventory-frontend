@@ -54,6 +54,7 @@ export default function ProductsPage() {
   const [catOpen, setCatOpen] = useState(false);
   const [catQuery, setCatQuery] = useState('');
   const catRef = useRef<HTMLDivElement>(null);
+  const attributeRequest = useRef(0);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -112,29 +113,35 @@ export default function ProductsPage() {
   };
 
   const closeProductModal = () => {
+    attributeRequest.current += 1;
     setShowModal(false);
     setEditingProduct(null);
     setFormData(emptyProductForm());
     setCategoryAttributes([]);
+    setAttrLoading(false);
     setCatOpen(false);
     setCatQuery('');
   };
 
   const openCreateProduct = () => {
+    attributeRequest.current += 1;
     setEditingProduct(null);
     setFormError('');
     setFormData(emptyProductForm());
     setCategoryAttributes([]);
+    setAttrLoading(false);
     setCatOpen(false);
     setCatQuery('');
     setShowModal(true);
   };
 
   const openEditProduct = async (product: Product) => {
+    attributeRequest.current += 1;
     setEditingProduct(product);
     setFormError('');
     setFormData(productForm(product));
     setCategoryAttributes([]);
+    setAttrLoading(false);
     setCatOpen(false);
     setCatQuery('');
     setShowModal(true);
@@ -142,6 +149,9 @@ export default function ProductsPage() {
 
   const handleSubmitProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (attrLoading) { setFormError('Wait for category attributes to finish loading.'); return; }
+    const unusableSelect = categoryAttributes.find(attribute => attribute.required && attribute.type === 'select' && attribute.options.length === 0);
+    if (!editingProduct && unusableSelect) { setFormError(`Category configuration error: required attribute “${unusableSelect.name}” has no selectable options.`); return; }
     const trackingError = validateProductTracking(formData);
     if (trackingError) { setFormError(trackingError); return; }
     const name = formData.name.trim();
@@ -197,18 +207,29 @@ export default function ProductsPage() {
     setFormData({ ...formData, categoryId, attributes: [{}] });
     setCatOpen(false);
     setCatQuery('');
+    setFormError('');
+    const requestId = ++attributeRequest.current;
+    if (editingProduct) {
+      setCategoryAttributes([]);
+      setAttrLoading(false);
+      return;
+    }
     if (categoryId) {
       setAttrLoading(true);
       try {
         const attrs = await realApi.getAttributes(Number(categoryId));
-        setCategoryAttributes(attrs);
+        if (attributeRequest.current === requestId) setCategoryAttributes(attrs);
       } catch {
-        setCategoryAttributes([]);
+        if (attributeRequest.current === requestId) {
+          setCategoryAttributes([]);
+          setFormError('Unable to load this category’s attributes. Choose the category again or try later.');
+        }
       } finally {
-        setAttrLoading(false);
+        if (attributeRequest.current === requestId) setAttrLoading(false);
       }
     } else {
       setCategoryAttributes([]);
+      setAttrLoading(false);
     }
   };
 
@@ -220,6 +241,7 @@ export default function ProductsPage() {
   const filteredCats = categories.filter(c =>
     c.name.toLowerCase().includes(catQuery.toLowerCase())
   );
+  const unusableRequiredSelect = !editingProduct && categoryAttributes.find(attribute => attribute.required && attribute.type === 'select' && attribute.options.length === 0);
 
   return (
     <div className="min-h-[calc(100vh-8rem)] bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.10),transparent_35%),radial-gradient(circle_at_bottom_left,rgba(249,115,22,0.08),transparent_30%),linear-gradient(160deg,#f8fafc_0%,#eef6ff_50%,#fff7ed_100%)] dark:bg-none dark:bg-slate-950 p-6">
@@ -552,17 +574,21 @@ export default function ProductsPage() {
                 </div>
               )}
 
+              {unusableRequiredSelect && <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700/50 dark:bg-amber-900/20 dark:text-amber-200">Category configuration error: required attribute “{unusableRequiredSelect.name}” has no selectable options. Add at least one option to that category attribute before creating a product.</div>}
+
               <div className="flex gap-3 pt-2">
                 <button
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || attrLoading || !!unusableRequiredSelect}
                   className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-950 dark:bg-white py-3 text-sm font-semibold text-white dark:text-slate-900 transition hover:bg-slate-800 dark:hover:bg-slate-100 disabled:bg-slate-400 dark:disabled:bg-slate-600 dark:disabled:text-slate-400"
                 >
-                  {submitting ? (
+                  {submitting || attrLoading ? (<>
                     <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} fill="none" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
+                    {attrLoading ? 'Loading attributes…' : 'Saving…'}
+                  </>
                   ) : editingProduct ? 'Save Changes' : 'Create Product'}
                 </button>
                 <button

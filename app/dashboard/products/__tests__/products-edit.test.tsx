@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ProductsPage from '../page';
-import { realApi, type Category, type Product } from '@/lib/api';
+import { realApi, type Attribute, type Category, type Product } from '@/lib/api';
 import { getPurchaseCatalog } from '@/lib/purchases';
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ replace: jest.fn() }) }));
@@ -69,4 +69,21 @@ it('updates mutable product details without sending immutable tracking fields', 
     categoryId: 5,
   }));
   expect(screen.queryByText('Edit Product')).not.toBeInTheDocument();
+});
+
+it('blocks creation while attributes load and explains an unusable required select', async () => {
+  let finishAttributes!: (attributes: Attribute[]) => void;
+  jest.mocked(realApi.getAttributes).mockReturnValue(new Promise(resolve => { finishAttributes = resolve; }));
+  render(<ProductsPage />);
+  await screen.findByText('Rice');
+  fireEvent.click(screen.getByRole('button', { name: 'Add Product' }));
+  fireEvent.click(screen.getByRole('button', { name: /Select a category/ }));
+  fireEvent.click(screen.getByRole('button', { name: /Food/ }));
+
+  expect(screen.getByRole('button', { name: 'Loading attributes…' })).toBeDisabled();
+
+  finishAttributes([{ id: 9, name: 'Filling', type: 'select', unit: null, options: [], required: true, categoryId: 5 }]);
+  expect(await screen.findByRole('alert')).toHaveTextContent('required attribute “Filling” has no selectable options');
+  expect(screen.getByRole('button', { name: 'Create Product' })).toBeDisabled();
+  expect(realApi.createProduct).not.toHaveBeenCalled();
 });
