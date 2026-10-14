@@ -15,7 +15,7 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 
-it('submits quantity and serialized lines together and shows backend totals', async () => {
+it('submits quantity and serialized lines together, clears the completed cart, and shows backend totals', async () => {
   const sell = jest.spyOn(realApi, 'sellBatchItems').mockResolvedValue({ soldItems: [{ id: 9 }], salesRecord: { id: 81, saleNumber: 'SALE-81', grossAmount: 262.5, discountAmount: 0, netAmount: 262.5, outstandingAmount: 0, lines: [] } } as never);
   render(<SellTab showMessage={jest.fn()} />);
   await screen.findByRole('option', { name: 'Rice · kg' });
@@ -29,6 +29,15 @@ it('submits quantity and serialized lines together and shows backend totals', as
   await screen.findByText(/Sale-81/i);
   expect(sell).toHaveBeenCalledWith({ paymentMethod: 'CASH', items: [{ productId: 42, quantity: 2.5, salePrice: 65, discountAmount: 0, notes: undefined }, { barcode: 'UNIT-1', salePrice: 100, discountAmount: 0, notes: undefined }] }, expect.any(String));
   expect(screen.getByText(/Backend total: 262.50/)).toBeInTheDocument();
+  expect(screen.getByText('Cart is empty')).toBeInTheDocument();
+  expect(screen.queryByText('UNIT-1')).not.toBeInTheDocument();
+  await waitFor(() => expect(localStorage.getItem('mixed-checkout-cart:v1')).toBeNull());
+
+  fireEvent.change(screen.getByLabelText('Product'), { target: { value: '42' } });
+  fireEvent.change(screen.getByLabelText('Quantity (kg)'), { target: { value: '1' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Add quantity' }));
+  expect(screen.getAllByText('৳65.00')).toHaveLength(2);
+  expect(screen.queryByText(/Backend total: 262.50/)).not.toBeInTheDocument();
 });
 
 it('rejects quantity beyond product precision before checkout', async () => {
