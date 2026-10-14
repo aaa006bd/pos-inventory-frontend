@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { realApi, Supplier, LedgerEntry, SupplierLedgerSummary, Expense, ExpenseSummary } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
+import { loadSupplierLedgerSummaries } from '@/lib/supplier-ledger-summary';
 
 const EMPTY_MODAL = { supplierId: '', amount: '', description: '' };
 
@@ -97,8 +98,8 @@ export default function FinancePage() {
     setLoadingAll(true);
     setAllError('');
     setAllLedgers(null);
-    realApi.getAllSupplierLedgers()
-      .then(data => setAllLedgers(Array.isArray(data) ? data : []))
+    loadSupplierLedgerSummaries()
+      .then(setAllLedgers)
       .catch(err => setAllError(err instanceof Error ? err.message : 'Failed to load ledgers'))
       .finally(() => setLoadingAll(false));
   };
@@ -178,6 +179,9 @@ export default function FinancePage() {
       });
       const paidSupplierId = Number(modalForm.supplierId);
       closeModal();
+      if (activeTab === 'all') {
+        fetchAllLedgers();
+      }
       // if the paid supplier is currently selected, refresh their ledger
       if (String(paidSupplierId) === selectedSupplierId) {
         fetchLedger(paidSupplierId);
