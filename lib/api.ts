@@ -302,7 +302,7 @@ export const realApi = {
     api.get<LedgerEntry[]>(`/accounting/ledger/suppliers/${supplierId}`),
 
   getAllSupplierLedgers: () =>
-    api.get<SupplierLedgerSummary[]>('/accounting/ledger/suppliers/'),
+    api.get<SupplierLedgerAggregate[]>('/accounting/ledger/suppliers/'),
 
   // Expense methods
   getExpenses: () =>
@@ -447,7 +447,8 @@ export interface ReceiptLot { id: number; productId: number; lotNumber: string; 
 export interface BatchReceiptResponse { items: InventoryItem[]; lot: ReceiptLot }
 export type CheckoutLine = { barcode: string; productId?: never; quantity?: never; salePrice: number; discountAmount: number; notes?: string } | { barcode?: never; productId: number; quantity: number; salePrice: number; discountAmount: number; notes?: string };
 export interface CheckoutInput { items: CheckoutLine[]; paymentMethod: 'CASH' | 'CREDIT'; customerId?: number }
-export interface CheckoutResponse { soldItems: InventoryItem[]; salesRecord: { id: number; saleNumber: string; netAmount: number; grossAmount: number; discountAmount: number; outstandingAmount: number; lines: unknown[] } }
+export interface CheckoutSalesRecordLine { quantity: number; baseUnit: ProductTracking['baseUnit'] }
+export interface CheckoutResponse { soldItems: InventoryItem[]; salesRecord: { id: number; saleNumber: string; netAmount: number; grossAmount: number; discountAmount: number; outstandingAmount: number; lines: CheckoutSalesRecordLine[] } }
 
 export interface DailyStockResponse {
   opening: number;
@@ -485,6 +486,12 @@ export interface SupplierLedgerSummary {
   balance: number;
   totalCredit: number;
   totalDebit: number;
+}
+
+export interface SupplierLedgerAggregate {
+  supplierId: number;
+  supplierName: string;
+  ledger: LedgerEntry[];
 }
 
 export interface SaleLine {
