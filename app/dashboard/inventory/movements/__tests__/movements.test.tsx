@@ -45,6 +45,16 @@ it('paginates and resets page when filters change', async () => {
   await waitFor(() => expect(movements.getInventoryMovements).toHaveBeenLastCalledWith({ ...movements.emptyMovementFilters, type: 'ADJUSTMENT' }, 1));
 });
 
+it('labels, filters, and links production movements', async () => {
+  (movements.getInventoryMovements as jest.Mock).mockResolvedValue({ items: [{ ...row, inventoryItemId: null, barcode: null, type: 'PRODUCTION_CONSUMPTION', toStatus: 'consumed', referenceType: 'PRODUCTION_ORDER', referenceId: 8, sourceDocumentNumber: 'PROD-8' }], page: 1, limit: 20, total: 1, netQuantityDelta: -1, netQuantityByUnit: { piece: -1 } });
+  render(<InventoryMovementsPage />);
+
+  expect(await screen.findByText('Material consumption')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'PROD-8' })).toHaveAttribute('href', '/dashboard/production/orders/8');
+  expect(screen.getByRole('option', { name: 'Production output' })).toHaveValue('PRODUCTION_OUTPUT');
+  expect(screen.getByRole('option', { name: 'Material consumption' })).toHaveValue('PRODUCTION_CONSUMPTION');
+});
+
 it('offers recovery from a failed ledger request', async () => {
   (movements.getInventoryMovements as jest.Mock).mockRejectedValueOnce(new Error('Network unavailable'));
   render(<InventoryMovementsPage />);
