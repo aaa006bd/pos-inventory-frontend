@@ -223,7 +223,7 @@ export const realApi = {
   createProduct: (data: { name: string; description?: string; basePrice: number; defaultCost?: number; categoryId: number; supplierId?: number; attributes: Record<string, string>[] } & Partial<ProductTracking>) =>
     api.post<Product>('/products', data),
   
-  updateProduct: (id: number, data: Partial<{ name: string; description: string; basePrice: number; categoryId: number; attributes: Record<string, string>; active: boolean }>) =>
+  updateProduct: (id: number, data: Partial<{ name: string; description: string; basePrice: number; defaultCost: number; categoryId: number; attributes: Record<string, string> }>) =>
     api.put<Product>(`/products/${id}`, data),
   
   deleteProduct: (id: number) =>
