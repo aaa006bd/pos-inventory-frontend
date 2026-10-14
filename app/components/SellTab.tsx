@@ -6,6 +6,7 @@ import { realApi, type Customer, type InventoryItemWithProduct, type Product, ty
 import { getPurchaseCatalog } from '@/lib/purchases';
 import { formatQuantity, validProductQuantity } from '@/lib/product-quantity';
 import { useDurableInventoryMutation } from './useDurableInventoryMutation';
+import { checkoutQuantitySummary } from '@/lib/checkout-summary';
 
 type CartLine =
   | { key: string; kind: 'SERIALIZED'; item: InventoryItemWithProduct; product: Product; quantity: 1; salePrice: string; discountAmount: string; notes: string }
@@ -28,9 +29,12 @@ export default function SellTab({ showMessage }: { showMessage: (type: 'success'
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CREDIT'>('CASH');
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '', address: '' });
-  const operation = useDurableInventoryMutation<CheckoutInput, CheckoutResponse>('checkout', realApi.sellBatchItems);
+  const operation = useDurableInventoryMutation<CheckoutInput, CheckoutResponse>('checkout', realApi.sellBatchItems, () => {
+    setCart([]);
+    try { localStorage.removeItem(CART_KEY); } catch { /* the in-memory cart is still cleared */ }
+  });
   useEffect(() => { setCart(loadCart()); void getPurchaseCatalog().then(setProducts).catch(cause => showMessage('error', cause instanceof Error ? cause.message : 'Unable to load products.')); void realApi.getCustomers().then(setCustomers).catch(() => showMessage('error', 'Unable to load customers.')); }, [showMessage]);
-  useEffect(() => { try { localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch { /* submitted operations remain recoverable */ } }, [cart]);
+  useEffect(() => { try { if (cart.length) localStorage.setItem(CART_KEY, JSON.stringify(cart)); else localStorage.removeItem(CART_KEY); } catch { /* submitted operations remain recoverable */ } }, [cart]);
   const quantityProducts = products.filter(product => product.active && product.trackingMode === 'QUANTITY');
   const selectedProduct = quantityProducts.find(product => product.id === Number(productId));
   const totals = useMemo(() => cart.reduce((result, line) => { const gross = Number(line.salePrice) * Number(line.quantity); const discount = Number(line.discountAmount || 0); return { gross: result.gross + gross, discount: result.discount + discount, net: result.net + gross - discount }; }, { gross: 0, discount: 0, net: 0 }), [cart]);
@@ -42,6 +46,7 @@ export default function SellTab({ showMessage }: { showMessage: (type: 'success'
       if (item.status !== 'in_stock') throw new Error(`Item is ${item.status}, not in stock.`);
       if ((item.product.trackingMode ?? 'SERIALIZED') !== 'SERIALIZED') throw new Error('Quantity products must be added by product and quantity.');
       if (cart.some(line => line.kind === 'SERIALIZED' && line.item.id === item.id)) throw new Error('This barcode is already in the cart.');
+      if (operation.result) operation.reset();
       setCart(lines => [...lines, { key: `unit:${item.id}`, kind: 'SERIALIZED', item, product: item.product, quantity: 1, salePrice: String(item.product.basePrice), discountAmount: '', notes: '' }]); setBarcode('');
     } catch (cause) { showMessage('error', cause instanceof Error ? cause.message : 'Unable to scan barcode.'); } finally { setScanning(false); }
   };
@@ -49,6 +54,7 @@ export default function SellTab({ showMessage }: { showMessage: (type: 'success'
     event.preventDefault(); if (!selectedProduct) return;
     const tracking = { trackingMode: 'QUANTITY' as const, baseUnit: selectedProduct.baseUnit ?? 'piece', quantityPrecision: selectedProduct.quantityPrecision ?? 0 };
     if (!validProductQuantity(quantity, tracking)) { showMessage('error', `Enter a positive quantity with at most ${tracking.quantityPrecision} decimal places.`); return; }
+    if (operation.result) operation.reset();
     setCart(lines => [...lines.filter(line => !(line.kind === 'QUANTITY' && line.product.id === selectedProduct.id)), { key: `product:${selectedProduct.id}`, kind: 'QUANTITY', product: selectedProduct, quantity, salePrice: String(selectedProduct.basePrice), discountAmount: '', notes: '' }]); setProductId(''); setQuantity('');
   };
   const update = (key: string, field: 'quantity' | 'salePrice' | 'discountAmount' | 'notes', value: string) => setCart(lines => lines.map(line => line.key === key ? { ...line, [field]: value } as CartLine : line));
@@ -159,6 +165,8 @@ export default function SellTab({ showMessage }: { showMessage: (type: 'success'
           )}
         </section>
 
+        {operation.result && <div role="status" className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 shadow-sm dark:border-emerald-700/50 dark:bg-emerald-900/20 dark:text-emerald-200"><p>Sale <strong>{operation.result.salesRecord.saleNumber}</strong> completed. The cart is ready for the next checkout.</p><p>Backend total: {Number(operation.result.salesRecord.netAmount).toFixed(2)} · {checkoutQuantitySummary(operation.result.salesRecord.lines, operation.result.soldItems.length)}</p><div className="flex gap-2"><Link className="flex-1 rounded-xl bg-emerald-700 px-3 py-2 text-center text-xs font-semibold text-white" href={`/dashboard/sales/records/${operation.result.salesRecord.id}`}>View sale</Link><button type="button" className="flex-1 rounded-xl border border-emerald-300 bg-white/70 px-3 py-2 text-xs font-semibold text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200" onClick={finish}>Dismiss</button></div></div>}
+
         {cart.length === 0 ? (
           <section className={`${cardClass} py-12 text-center`}>
             <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800"><svg className="h-8 w-8 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13 5.4 5M7 13l-2.3 2.3c-.63.63-.18 1.7.7 1.7H17m0 0a2 2 0 100 4 2 2 0 000-4Zm-8 2a2 2 0 11-4 0 2 2 0 014 0Z" /></svg></div>
@@ -202,7 +210,6 @@ export default function SellTab({ showMessage }: { showMessage: (type: 'success'
             {!operation.result && <button type="button" onClick={checkout} disabled={!cart.length || operation.busy || !!operation.pending || !operation.ready} className="mt-4 flex w-full items-center justify-center rounded-2xl bg-slate-950 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 dark:disabled:bg-slate-600 dark:disabled:text-slate-400">{operation.busy ? 'Completing…' : 'Complete sale'}</button>}
             {operation.error && <p role="alert" className="mt-4 rounded-2xl border border-rose-100 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-700/50 dark:bg-rose-900/20 dark:text-rose-300">{operation.error}</p>}
             {operation.pending && <button type="button" className="mt-3 w-full rounded-2xl border border-slate-200 bg-white py-3 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200" onClick={operation.retry} disabled={operation.busy}>Recover checkout result</button>}
-            {operation.result && <div role="status" className="mt-4 space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-700/50 dark:bg-emerald-900/20 dark:text-emerald-200"><p>Sale <strong>{operation.result.salesRecord.saleNumber}</strong> completed.</p><p>Backend total: {Number(operation.result.salesRecord.netAmount).toFixed(2)} · {operation.result.soldItems.length} serialized units sold.</p><div className="flex gap-2"><Link className="flex-1 rounded-xl bg-emerald-700 px-3 py-2 text-center text-xs font-semibold text-white" href={`/dashboard/sales/records/${operation.result.salesRecord.id}`}>View sale</Link><button type="button" className="flex-1 rounded-xl border border-emerald-300 bg-white/70 px-3 py-2 text-xs font-semibold text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200" onClick={finish}>New checkout</button></div></div>}
           </section>
         )}
       </div>

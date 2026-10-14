@@ -1,13 +1,13 @@
 import { api } from './api';
 import { baseUnits, type BaseUnit } from './product-quantity';
 
-export const movementTypes = { OPENING_BALANCE: 'Opening balance', PURCHASE_RECEIPT: 'Purchase receipt', SALE: 'Sale', CUSTOMER_RETURN: 'Customer return', SUPPLIER_RETURN: 'Supplier return', ADJUSTMENT: 'Adjustment' };
-export const stockStatuses = { in_stock: 'In stock', sold: 'Sold', damaged: 'Damaged', returned: 'Returned' };
+export const movementTypes = { OPENING_BALANCE: 'Opening balance', PURCHASE_RECEIPT: 'Purchase receipt', SALE: 'Sale', CUSTOMER_RETURN: 'Customer return', SUPPLIER_RETURN: 'Supplier return', ADJUSTMENT: 'Adjustment', PRODUCTION_CONSUMPTION: 'Material consumption', PRODUCTION_OUTPUT: 'Production output' };
+export const stockStatuses = { in_stock: 'In stock', sold: 'Sold', damaged: 'Damaged', returned: 'Returned', consumed: 'Consumed' };
 export interface InventoryMovement {
   id: number; inventoryItemId: number | null; productId: number; productName: string; barcode: string | null; baseUnit: BaseUnit;
   type: keyof typeof movementTypes; quantityDelta: number;
   fromStatus: keyof typeof stockStatuses | null; toStatus: keyof typeof stockStatuses;
-  referenceType: 'INVENTORY_LOT' | 'SALES_RECORD' | 'INVENTORY_RETURN' | 'MANUAL_ADJUSTMENT' | 'MIGRATION';
+  referenceType: 'INVENTORY_LOT' | 'SALES_RECORD' | 'INVENTORY_RETURN' | 'MANUAL_ADJUSTMENT' | 'MIGRATION' | 'PRODUCTION_ORDER';
   referenceId: number | null; sourceDocumentNumber: string | null;
   unitCost: number | null; reason: string | null; notes: string | null; actorId: number | null; actorName: string | null; occurredAt: string;
 }
@@ -29,6 +29,7 @@ export async function getInventoryMovements(filters: MovementFilters, page: numb
 }
 export function movementSourceLink(row: InventoryMovement): string | undefined {
   if (row.referenceType === 'SALES_RECORD' && row.referenceId) return `/dashboard/sales/records/${row.referenceId}`;
+  if (row.referenceType === 'PRODUCTION_ORDER' && row.referenceId) return `/dashboard/production/orders/${row.referenceId}`;
   if (row.referenceType === 'INVENTORY_LOT' && row.inventoryItemId !== null && row.sourceDocumentNumber) return `/dashboard/inventory/list?lotNumber=${encodeURIComponent(row.sourceDocumentNumber)}`;
 }
 export function movementSourceLabel(row: InventoryMovement) {

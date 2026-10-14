@@ -7,6 +7,7 @@ import { realApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { Category } from '@/lib/api';
 import { getCatalogNameError, normalizeCatalogName } from '@/lib/catalog-name';
+import { sortCategoriesNewestFirst } from '@/lib/category-order';
 
 interface CategoryFormData {
   name: string;
@@ -79,7 +80,7 @@ export default function CategoriesPage() {
             }
           })
         );
-        setCategories(categoriesWithAttrs);
+        setCategories(sortCategoriesNewestFirst(categoriesWithAttrs));
       })
       .catch(console.error)
       .finally(() => setLoading(false));

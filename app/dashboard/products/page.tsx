@@ -6,8 +6,34 @@ import { realApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { Category, Product, Attribute } from '@/lib/api';
 import ProductTrackingFields from '@/app/components/ProductTrackingFields';
-import { serializedTracking, validateProductTracking } from '@/lib/product-quantity';
+import { serializedTracking, validateProductTracking, type ProductTracking } from '@/lib/product-quantity';
 import { getPurchaseCatalog } from '@/lib/purchases';
+import { sortCategoriesNewestFirst } from '@/lib/category-order';
+
+type ProductFormData = ProductTracking & {
+  name: string;
+  basePrice: string;
+  categoryId: string;
+  attributes: Record<string, string>[];
+};
+
+const emptyProductForm = (): ProductFormData => ({
+  ...serializedTracking,
+  name: '',
+  basePrice: '',
+  categoryId: '',
+  attributes: [{}],
+});
+
+const productForm = (product: Product): ProductFormData => ({
+  trackingMode: product.trackingMode ?? 'SERIALIZED',
+  baseUnit: product.baseUnit ?? 'piece',
+  quantityPrecision: product.quantityPrecision ?? 0,
+  name: product.name,
+  basePrice: String(product.basePrice),
+  categoryId: String(product.categoryId),
+  attributes: [{}],
+});
 
 export default function ProductsPage() {
   const { token, loading: authLoading } = useAuth();
@@ -16,15 +42,10 @@ export default function ProductsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [categoryAttributes, setCategoryAttributes] = useState<Attribute[]>([]);
   const [attrLoading, setAttrLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    ...serializedTracking,
-    name: '',
-    basePrice: '',
-    categoryId: '',
-    attributes: [{}] as Record<string, string>[],
-  });
+  const [formData, setFormData] = useState<ProductFormData>(emptyProductForm);
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState('');
@@ -33,6 +54,7 @@ export default function ProductsPage() {
   const [catOpen, setCatOpen] = useState(false);
   const [catQuery, setCatQuery] = useState('');
   const catRef = useRef<HTMLDivElement>(null);
+  const attributeRequest = useRef(0);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -61,7 +83,7 @@ export default function ProductsPage() {
           ...p,
           basePrice: Number(p.basePrice),
         })) : [];
-        setCategories(cats);
+        setCategories(sortCategoriesNewestFirst(cats));
         setProducts(normalizedProducts);
       })
       .catch(console.error)
@@ -85,37 +107,82 @@ export default function ProductsPage() {
     );
   }
 
-  const resetForm = () => ({
-    ...serializedTracking,
-    name: '',
-    basePrice: '',
-    categoryId: '',
-    attributes: [{}] as Record<string, string>[],
-  });
+  const refreshProducts = async () => {
+    const prods = await getPurchaseCatalog();
+    setProducts(Array.isArray(prods) ? prods.map(product => ({ ...product, basePrice: Number(product.basePrice) })) : []);
+  };
 
-  const handleCreateProduct = async (e: React.FormEvent) => {
+  const closeProductModal = () => {
+    attributeRequest.current += 1;
+    setShowModal(false);
+    setEditingProduct(null);
+    setFormData(emptyProductForm());
+    setCategoryAttributes([]);
+    setAttrLoading(false);
+    setCatOpen(false);
+    setCatQuery('');
+  };
+
+  const openCreateProduct = () => {
+    attributeRequest.current += 1;
+    setEditingProduct(null);
+    setFormError('');
+    setFormData(emptyProductForm());
+    setCategoryAttributes([]);
+    setAttrLoading(false);
+    setCatOpen(false);
+    setCatQuery('');
+    setShowModal(true);
+  };
+
+  const openEditProduct = async (product: Product) => {
+    attributeRequest.current += 1;
+    setEditingProduct(product);
+    setFormError('');
+    setFormData(productForm(product));
+    setCategoryAttributes([]);
+    setAttrLoading(false);
+    setCatOpen(false);
+    setCatQuery('');
+    setShowModal(true);
+  };
+
+  const handleSubmitProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (attrLoading) { setFormError('Wait for category attributes to finish loading.'); return; }
+    const unusableSelect = categoryAttributes.find(attribute => attribute.required && attribute.type === 'select' && attribute.options.length === 0);
+    if (!editingProduct && unusableSelect) { setFormError(`Category configuration error: required attribute “${unusableSelect.name}” has no selectable options.`); return; }
     const trackingError = validateProductTracking(formData);
     if (trackingError) { setFormError(trackingError); return; }
+    const name = formData.name.trim();
+    const basePrice = Number(formData.basePrice);
+    if (!name) { setFormError('Product name is required.'); return; }
+    if (!Number.isFinite(basePrice) || basePrice < 0) { setFormError('Enter a valid price.'); return; }
+    if (!Number.isInteger(Number(formData.categoryId)) || Number(formData.categoryId) < 1) { setFormError('Select a category.'); return; }
     setFormError('');
     setSubmitting(true);
     try {
-      await realApi.createProduct({
-        trackingMode: formData.trackingMode,
-        baseUnit: formData.baseUnit,
-        quantityPrecision: formData.quantityPrecision,
-        name: formData.name,
-        basePrice: Number(formData.basePrice),
-        categoryId: Number(formData.categoryId),
-        attributes: formData.attributes,
-      });
-      setShowModal(false);
-      setFormData(resetForm());
-      setCategoryAttributes([]);
-      const prods = await getPurchaseCatalog();
-      setProducts(Array.isArray(prods) ? prods.map(p => ({ ...p, basePrice: Number(p.basePrice) })) : []);
+      if (editingProduct) {
+        await realApi.updateProduct(editingProduct.id, {
+          name,
+          basePrice,
+          categoryId: Number(formData.categoryId),
+        });
+      } else {
+        await realApi.createProduct({
+          trackingMode: formData.trackingMode,
+          baseUnit: formData.baseUnit,
+          quantityPrecision: formData.quantityPrecision,
+          name,
+          basePrice,
+          categoryId: Number(formData.categoryId),
+          attributes: formData.attributes,
+        });
+      }
+      closeProductModal();
+      await refreshProducts();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Failed to create product');
+      setFormError(err instanceof Error ? err.message : editingProduct ? 'Failed to update product' : 'Failed to create product');
     } finally {
       setSubmitting(false);
     }
@@ -140,18 +207,29 @@ export default function ProductsPage() {
     setFormData({ ...formData, categoryId, attributes: [{}] });
     setCatOpen(false);
     setCatQuery('');
+    setFormError('');
+    const requestId = ++attributeRequest.current;
+    if (editingProduct) {
+      setCategoryAttributes([]);
+      setAttrLoading(false);
+      return;
+    }
     if (categoryId) {
       setAttrLoading(true);
       try {
         const attrs = await realApi.getAttributes(Number(categoryId));
-        setCategoryAttributes(attrs);
+        if (attributeRequest.current === requestId) setCategoryAttributes(attrs);
       } catch {
-        setCategoryAttributes([]);
+        if (attributeRequest.current === requestId) {
+          setCategoryAttributes([]);
+          setFormError('Unable to load this category’s attributes. Choose the category again or try later.');
+        }
       } finally {
-        setAttrLoading(false);
+        if (attributeRequest.current === requestId) setAttrLoading(false);
       }
     } else {
       setCategoryAttributes([]);
+      setAttrLoading(false);
     }
   };
 
@@ -163,6 +241,7 @@ export default function ProductsPage() {
   const filteredCats = categories.filter(c =>
     c.name.toLowerCase().includes(catQuery.toLowerCase())
   );
+  const unusableRequiredSelect = !editingProduct && categoryAttributes.find(attribute => attribute.required && attribute.type === 'select' && attribute.options.length === 0);
 
   return (
     <div className="min-h-[calc(100vh-8rem)] bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.10),transparent_35%),radial-gradient(circle_at_bottom_left,rgba(249,115,22,0.08),transparent_30%),linear-gradient(160deg,#f8fafc_0%,#eef6ff_50%,#fff7ed_100%)] dark:bg-none dark:bg-slate-950 p-6">
@@ -179,14 +258,7 @@ export default function ProductsPage() {
             Products
           </div>
           <button
-            onClick={() => {
-              setShowModal(true);
-              setFormError('');
-              setFormData(resetForm());
-              setCategoryAttributes([]);
-              setCatOpen(false);
-              setCatQuery('');
-            }}
+            onClick={openCreateProduct}
             className="flex items-center gap-2 rounded-2xl bg-slate-950 dark:bg-slate-100 px-5 py-2.5 text-sm font-semibold text-white dark:text-slate-900 transition hover:bg-slate-800 dark:hover:bg-white"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -276,6 +348,14 @@ export default function ProductsPage() {
                     <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${product.active ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'}`}>
                       {product.active ? 'Active' : 'Inactive'}
                     </span>
+                    <button
+                      type="button"
+                      aria-label={`Edit ${product.name}`}
+                      onClick={() => void openEditProduct(product)}
+                      className="shrink-0 rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-sky-300 hover:text-sky-700 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-300 dark:hover:border-sky-600 dark:hover:text-sky-300"
+                    >
+                      Edit
+                    </button>
                   </div>
                 );
               })}
@@ -288,7 +368,7 @@ export default function ProductsPage() {
           Outer div has NO overflow so the category/supplier dropdowns can freely overflow the modal bounds.
           Only the attributes section has its own bounded scroll. */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-sm p-4" onClick={() => setShowModal(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-sm p-4" onClick={closeProductModal}>
           <div
             className="w-full max-w-lg rounded-[28px] border border-white/80 dark:border-slate-700/70 bg-white/95 dark:bg-slate-800/95 p-7 shadow-[0_30px_80px_-36px_rgba(15,23,42,0.40)] backdrop-blur max-h-[90vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}
@@ -296,17 +376,23 @@ export default function ProductsPage() {
             <div className="mb-1.5 h-1 w-10 rounded-full bg-linear-to-r from-sky-500 to-orange-400" />
             <div className="mb-6">
               <div className="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300 mb-1">
-                New Product
+                {editingProduct ? 'Edit Product' : 'New Product'}
               </div>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Fill in the details to create a product</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{editingProduct ? 'Update the product details and selling price' : 'Fill in the details to create a product'}</p>
             </div>
 
             {formError && (
               <div className="mb-4 rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-700/50 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">{formError}</div>
             )}
 
-            <form onSubmit={handleCreateProduct} className="space-y-4">
-              <ProductTrackingFields value={formData} onChange={tracking => setFormData({ ...formData, ...tracking })} />
+            <form onSubmit={handleSubmitProduct} className="space-y-4">
+              {editingProduct ? (
+                <fieldset className="space-y-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                  <legend className="px-1 text-sm font-semibold">Inventory tracking</legend>
+                  <p className="text-sm text-slate-700 dark:text-slate-300">{formData.trackingMode === 'SERIALIZED' ? 'Serialized' : 'Quantity'} · {formData.baseUnit} · {formData.quantityPrecision} decimal places</p>
+                  <p className="text-xs text-slate-500">Tracking mode, base unit, and precision cannot change after creation.</p>
+                </fieldset>
+              ) : <ProductTrackingFields value={formData} onChange={tracking => setFormData({ ...formData, ...tracking })} />}
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Name *</label>
                 <input
@@ -324,10 +410,12 @@ export default function ProductsPage() {
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-400 dark:text-slate-500">Tk</span>
                   <input
+                    aria-label={`Price per ${formData.baseUnit}`}
                     type="number"
                     step="0.01"
                     value={formData.basePrice}
                     onChange={(e) => setFormData({ ...formData, basePrice: e.target.value })}
+                    onWheel={event => event.currentTarget.blur()}
                     placeholder="19.99"
                     required
                     className="w-full rounded-2xl border border-slate-200 dark:border-slate-600 bg-slate-50/70 dark:bg-slate-700/50 pl-11 pr-4 py-3 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-sky-400 dark:focus:border-sky-500 focus:bg-white dark:focus:bg-slate-700 focus:ring-4 focus:ring-sky-100 dark:focus:ring-sky-900/50 placeholder:text-slate-400 dark:placeholder:text-slate-500"
@@ -408,7 +496,7 @@ export default function ProductsPage() {
               </div>
 
               {/* Attributes — variant rows */}
-              {(attrLoading || categoryAttributes.length > 0) && (
+              {!editingProduct && (attrLoading || categoryAttributes.length > 0) && (
                 <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-700/30 p-4">
                   {attrLoading ? (
                     <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
@@ -486,22 +574,26 @@ export default function ProductsPage() {
                 </div>
               )}
 
+              {unusableRequiredSelect && <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700/50 dark:bg-amber-900/20 dark:text-amber-200">Category configuration error: required attribute “{unusableRequiredSelect.name}” has no selectable options. Add at least one option to that category attribute before creating a product.</div>}
+
               <div className="flex gap-3 pt-2">
                 <button
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || attrLoading || !!unusableRequiredSelect}
                   className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-950 dark:bg-white py-3 text-sm font-semibold text-white dark:text-slate-900 transition hover:bg-slate-800 dark:hover:bg-slate-100 disabled:bg-slate-400 dark:disabled:bg-slate-600 dark:disabled:text-slate-400"
                 >
-                  {submitting ? (
+                  {submitting || attrLoading ? (<>
                     <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} fill="none" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
-                  ) : 'Create Product'}
+                    {attrLoading ? 'Loading attributes…' : 'Saving…'}
+                  </>
+                  ) : editingProduct ? 'Save Changes' : 'Create Product'}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={closeProductModal}
                   className="rounded-2xl border border-slate-200 dark:border-slate-600 bg-white/70 dark:bg-slate-700/50 px-5 py-3 text-sm font-semibold text-slate-600 dark:text-slate-300 transition hover:bg-white dark:hover:bg-slate-700"
                 >
                   Cancel
