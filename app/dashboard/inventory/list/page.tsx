@@ -7,8 +7,9 @@ import { realApi, InventoryItemWithProduct } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import InventoryListTab from '@/app/components/InventoryListTab';
 
-const LIMIT_OPTIONS = [10, 20, 30, 40] as const;
-type LimitOption = typeof LIMIT_OPTIONS[number] | 'all';
+const LIMIT_OPTIONS = [10, 20, 30, 40, 100] as const;
+type LimitOption = typeof LIMIT_OPTIONS[number];
+type StatusFilter = 'all' | InventoryItemWithProduct['status'];
 
 export default function InventoryListPage() {
   return <Suspense fallback={<p>Loading inventory…</p>}><InventoryListRoute /></Suspense>;
@@ -25,16 +26,17 @@ function InventoryListContent({ lotNumber }: { lotNumber: string }) {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [limitOption, setLimitOption] = useState<LimitOption>(20);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const resolvedLimit = limitOption === 'all' ? 10000 : limitOption;
-
-  const fetchInventory = useCallback(async (p: number, lim: number) => {
+  const fetchInventory = useCallback(async (p: number, lim: number, status: StatusFilter, search: string) => {
     setLoading(true);
     setError('');
     try {
-      const res = await realApi.getInventory({ page: p, limit: lim, lotNumber: lotNumber || undefined });
+      const res = await realApi.getInventory({ page: p, limit: lim, lotNumber: lotNumber || undefined, status: status === 'all' ? undefined : status, search: search || undefined });
       setInventory(res.items);
       setTotal(res.total);
     } catch (err) {
@@ -45,24 +47,41 @@ function InventoryListContent({ lotNumber }: { lotNumber: string }) {
   }, [lotNumber]);
 
   useEffect(() => {
-    if (token) fetchInventory(page, resolvedLimit);
-  }, [token, page, resolvedLimit, fetchInventory]);
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim());
+      setPage(1);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
 
-  const pageCount = limitOption === 'all' ? 1 : Math.ceil(total / resolvedLimit);
+  useEffect(() => {
+    if (token) fetchInventory(page, limitOption, statusFilter, debouncedSearch);
+  }, [token, page, limitOption, statusFilter, debouncedSearch, fetchInventory]);
+
+  const pageCount = Math.max(1, Math.ceil(total / limitOption));
 
   const handleLimitChange = (opt: LimitOption) => {
     setLimitOption(opt);
     setPage(1);
   };
 
+  const handleStatusChange = (status: StatusFilter) => {
+    setStatusFilter(status);
+    setPage(1);
+  };
+
   return (
     <>
       {lotNumber && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200 p-4 text-sm dark:border-sky-800"><span>Stock for lot: <strong>{lotNumber}</strong></span><Link href="/dashboard/inventory/list" className="text-sky-600 underline">Show all inventory</Link></div>}
-      {error && <div role="alert" className="mb-4 rounded-xl bg-rose-50 p-4 text-rose-700 dark:bg-rose-950 dark:text-rose-200">{error} <button className="underline" onClick={() => fetchInventory(page, resolvedLimit)}>Try again</button></div>}
+      {error && <div role="alert" className="mb-4 rounded-xl bg-rose-50 p-4 text-rose-700 dark:bg-rose-950 dark:text-rose-200">{error} <button className="underline" onClick={() => fetchInventory(page, limitOption, statusFilter, debouncedSearch)}>Try again</button></div>}
       <InventoryListTab
         inventory={inventory}
-        onRefresh={() => fetchInventory(page, resolvedLimit)}
+        onRefresh={() => fetchInventory(page, limitOption, statusFilter, debouncedSearch)}
         total={total}
+        statusFilter={statusFilter}
+        onStatusFilterChange={handleStatusChange}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
       />
 
       <div className="flex items-center justify-between gap-4 px-6 pb-6 max-w-6xl mx-auto">
@@ -70,7 +89,7 @@ function InventoryListContent({ lotNumber }: { lotNumber: string }) {
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Rows per page:</span>
           <div className="flex items-center gap-1">
-            {(['all', ...LIMIT_OPTIONS] as LimitOption[]).map(opt => (
+            {LIMIT_OPTIONS.map(opt => (
               <button
                 key={opt}
                 onClick={() => handleLimitChange(opt)}
@@ -80,7 +99,7 @@ function InventoryListContent({ lotNumber }: { lotNumber: string }) {
                     : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                 }`}
               >
-                {opt === 'all' ? 'All' : opt}
+                {opt}
               </button>
             ))}
           </div>

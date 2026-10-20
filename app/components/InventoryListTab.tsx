@@ -1,12 +1,16 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { InventoryItemWithProduct } from '@/lib/api';
 
 interface InventoryListTabProps {
   inventory: InventoryItemWithProduct[];
   onRefresh: () => void;
   total?: number;
+  statusFilter: StatusFilter;
+  onStatusFilterChange: (status: StatusFilter) => void;
+  searchQuery: string;
+  onSearchQueryChange: (query: string) => void;
 }
 
 type StatusFilter = 'all' | 'in_stock' | 'sold' | 'damaged' | 'returned';
@@ -38,22 +42,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export default function InventoryListTab({ inventory, onRefresh, total }: InventoryListTabProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-
-  const filteredInventory = useMemo(() => {
-    const q = searchQuery.toLowerCase();
-    return inventory.filter((item) => {
-      const matchesSearch =
-        q === '' ||
-        item.barcode.toLowerCase().includes(q) ||
-        item.product?.name?.toLowerCase().includes(q) ||
-        item.supplier?.name?.toLowerCase().includes(q);
-      const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
-      return matchesSearch && matchesStatus;
-    });
-  }, [inventory, searchQuery, statusFilter]);
+export default function InventoryListTab({ inventory, onRefresh, total, statusFilter, onStatusFilterChange, searchQuery, onSearchQueryChange }: InventoryListTabProps) {
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { in_stock: 0, sold: 0, damaged: 0, returned: 0 };
@@ -118,7 +107,8 @@ export default function InventoryListTab({ inventory, onRefresh, total }: Invent
               <input
                 type="text"
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+                onChange={e => onSearchQueryChange(e.target.value)}
+                maxLength={100}
                 placeholder="Search by barcode, product or supplier..."
                 className="w-full rounded-2xl border border-slate-200 dark:border-slate-600 bg-slate-50/70 dark:bg-slate-700/50 pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-sky-400 dark:focus:border-sky-500 focus:bg-white dark:focus:bg-slate-700 focus:ring-4 focus:ring-sky-100 dark:focus:ring-sky-900/50"
               />
@@ -127,7 +117,7 @@ export default function InventoryListTab({ inventory, onRefresh, total }: Invent
               {STATUS_FILTERS.map(f => (
                 <button
                   key={f.value}
-                  onClick={() => setStatusFilter(f.value)}
+                  onClick={() => onStatusFilterChange(f.value)}
                   className={`rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
                     statusFilter === f.value
                       ? 'bg-slate-950 dark:bg-white text-white dark:text-slate-900 shadow-sm'
@@ -141,9 +131,9 @@ export default function InventoryListTab({ inventory, onRefresh, total }: Invent
           </div>
           {(searchQuery || statusFilter !== 'all') && (
             <div className="mt-3 flex items-center gap-2">
-              <span className="text-xs text-slate-500 dark:text-slate-400">{filteredInventory.length} result{filteredInventory.length !== 1 ? 's' : ''}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">{total ?? inventory.length} result{(total ?? inventory.length) !== 1 ? 's' : ''}</span>
               <button
-                onClick={() => { setSearchQuery(''); setStatusFilter('all'); }}
+                onClick={() => { onSearchQueryChange(''); onStatusFilterChange('all'); }}
                 className="text-xs font-semibold text-sky-700 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-300 transition"
               >
                 Clear filters
@@ -153,12 +143,12 @@ export default function InventoryListTab({ inventory, onRefresh, total }: Invent
         </div>
 
         {/* Table card */}
-        {filteredInventory.length > 0 ? (
+        {inventory.length > 0 ? (
           <div className="rounded-[28px] border border-white/80 dark:border-slate-700/70 bg-white/88 dark:bg-slate-800/90 shadow-[0_30px_80px_-36px_rgba(15,23,42,0.30)] backdrop-blur overflow-hidden">
             <div className="px-7 pt-6 pb-4 border-b border-slate-100 dark:border-slate-700/50">
               <div className="mb-1.5 h-1 w-10 rounded-full bg-linear-to-r from-sky-500 to-orange-400" />
               <div className="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300">
-                Items &mdash; {filteredInventory.length}
+                Items &mdash; {inventory.length}
               </div>
             </div>
             <div className="overflow-x-auto">
@@ -174,10 +164,10 @@ export default function InventoryListTab({ inventory, onRefresh, total }: Invent
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredInventory.map((item, idx) => (
+                  {inventory.map((item, idx) => (
                     <tr
                       key={item.id}
-                      className={`transition-colors hover:bg-sky-50/40 dark:hover:bg-sky-900/10 ${idx !== filteredInventory.length - 1 ? 'border-b border-slate-100 dark:border-slate-700/50' : ''}`}
+                      className={`transition-colors hover:bg-sky-50/40 dark:hover:bg-sky-900/10 ${idx !== inventory.length - 1 ? 'border-b border-slate-100 dark:border-slate-700/50' : ''}`}
                     >
                       <td className="px-6 py-4 font-mono text-xs text-slate-500 dark:text-slate-400">{item.barcode}</td>
                       <td className="px-6 py-4 text-sm font-semibold text-slate-900 dark:text-slate-100">{item.product?.name ?? '—'}</td>
@@ -214,7 +204,7 @@ export default function InventoryListTab({ inventory, onRefresh, total }: Invent
             </p>
             {(searchQuery || statusFilter !== 'all') && (
               <button
-                onClick={() => { setSearchQuery(''); setStatusFilter('all'); }}
+                onClick={() => { onSearchQueryChange(''); onStatusFilterChange('all'); }}
                 className="mt-4 rounded-2xl bg-slate-950 dark:bg-white px-5 py-2.5 text-sm font-semibold text-white dark:text-slate-900 transition hover:bg-slate-800 dark:hover:bg-slate-100"
               >
                 Clear filters
