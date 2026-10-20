@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import Link from 'next/link';
 import { InventoryItemWithProduct } from '@/lib/api';
 
 interface InventoryListTabProps {
@@ -157,6 +158,7 @@ export default function InventoryListTab({ inventory, onRefresh, total, statusFi
                   <tr className="bg-slate-50/80 dark:bg-slate-800/80">
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700/50">Barcode</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700/50">Product</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700/50">Lot</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700/50">Supplier</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700/50">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700/50">Acquired</th>
@@ -171,6 +173,7 @@ export default function InventoryListTab({ inventory, onRefresh, total, statusFi
                     >
                       <td className="px-6 py-4 font-mono text-xs text-slate-500 dark:text-slate-400">{item.barcode}</td>
                       <td className="px-6 py-4 text-sm font-semibold text-slate-900 dark:text-slate-100">{item.product?.name ?? '—'}</td>
+                      <td className="px-6 py-4 font-mono text-xs text-slate-600 dark:text-slate-300">{item.lotNumber ? <Link className="text-sky-700 hover:underline dark:text-sky-400" href={`/dashboard/inventory/list?lotNumber=${encodeURIComponent(item.lotNumber)}`}>{item.lotNumber}</Link> : '—'}</td>
                       <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{item.supplier?.name ?? <span className="text-slate-300 dark:text-slate-600">—</span>}</td>
                       <td className="px-6 py-4"><StatusBadge status={item.status} /></td>
                       <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">
