@@ -18,10 +18,18 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 
+it('distinguishes allocatable receipts from checkout payments', async () => {
+  jest.spyOn(customerPaymentsApi, 'list').mockResolvedValue({ items: [], page: 1, limit: 20, total: 0 });
+  render(<PaymentsWorkspace customerId={17} />);
+  expect(await screen.findByText('No separately received payments or customer credit recorded.')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Sales History' })).toHaveAttribute('href', '/dashboard/sales/history');
+  expect(screen.getByRole('button', { name: 'Receive customer payment' })).toBeInTheDocument();
+});
+
 it('records money once without auto-allocating and links to the next step', async () => {
   const execute = jest.spyOn(customerPaymentsApi, 'execute').mockResolvedValue(payment);
   render(<PaymentsWorkspace customerId={17} orderId={25} />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Receive payment' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Receive customer payment' }));
   fireEvent.change(screen.getByLabelText('Amount received'), { target: { value: '100' } });
   fireEvent.change(screen.getByLabelText('Transaction reference'), { target: { value: 'RCPT-1' } });
   fireEvent.click(screen.getByRole('button', { name: 'Record money received' }));
@@ -42,7 +50,7 @@ it('applies existing credit to the preselected order without receiving money aga
 it('recovers an uncertain receive after a reload with the original key and payload', async () => {
   const execute = jest.spyOn(customerPaymentsApi, 'execute').mockRejectedValueOnce(new TypeError('Network error')).mockResolvedValueOnce(payment);
   const first = render(<PaymentsWorkspace customerId={17} />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Receive payment' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Receive customer payment' }));
   fireEvent.change(screen.getByLabelText('Amount received'), { target: { value: '100' } });
   fireEvent.change(screen.getByLabelText('Transaction reference'), { target: { value: 'RCPT-1' } });
   fireEvent.click(screen.getByRole('button', { name: 'Record money received' }));
@@ -50,7 +58,7 @@ it('recovers an uncertain receive after a reload with the original key and paylo
   const original = execute.mock.calls[0];
   first.unmount();
   render(<PaymentsWorkspace customerId={17} />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Receive payment' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Receive customer payment' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Recover payment result' }));
   await screen.findByRole('link', { name: 'View payment and apply credit' });
   expect(execute.mock.calls[1]).toEqual(original);
