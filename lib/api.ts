@@ -500,10 +500,12 @@ export interface SaleLine {
   id: number;
   tenantId: number;
   salesRecordId: number;
-  inventoryItemId: number;
+  inventoryItemId: number | null;
   productId: number;
   product: Product;
-  barcode: string;
+  barcode: string | null;
+  quantity: number;
+  baseUnit: ProductTracking['baseUnit'];
   salePrice: string;
   discountAmount: string;
   netAmount: string;

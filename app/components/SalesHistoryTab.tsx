@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { realApi, Customer, SaleRecord, SalesListResponse } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
+import { formatQuantity } from '@/lib/product-quantity';
 
 const PAGE_LIMIT = 20;
 
@@ -89,6 +90,7 @@ function SaleDetailModal({ sale, onClose }: { sale: SaleRecord; onClose: () => v
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400">Barcode</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400">Product</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400">SKU</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400">Quantity sold</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400">Sale Price</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400">Discount</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400">Net</th>
@@ -97,9 +99,10 @@ function SaleDetailModal({ sale, onClose }: { sale: SaleRecord; onClose: () => v
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {sale.lines.map((line) => (
                   <tr key={line.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition">
-                    <td className="px-4 py-3 font-mono text-xs text-slate-600 dark:text-slate-300">{line.barcode}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-slate-600 dark:text-slate-300">{line.barcode ?? '—'}</td>
                     <td className="px-4 py-3 text-slate-900 dark:text-slate-100">{line.product?.name ?? '—'}</td>
                     <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">{line.product?.sku ?? '—'}</td>
+                    <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300">{formatQuantity(line.quantity, line.baseUnit)}</td>
                     <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300">{fmt(line.salePrice)}</td>
                     <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300">{fmt(line.discountAmount)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-slate-900 dark:text-slate-100">{fmt(line.netAmount)}</td>
