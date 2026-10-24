@@ -455,6 +455,7 @@ export interface CheckoutResponse { soldItems: InventoryItem[]; salesRecord: { i
 export interface DailyStockResponse {
   opening: number;
   closing: number;
+  timezone: 'Asia/Dhaka';
 }
 
 export interface BarcodeImageResponse {
