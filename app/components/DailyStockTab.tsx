@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { realApi } from '@/lib/api';
 import { Product, DailyStockResponse } from '@/lib/api';
+import { dailyStockBusinessDate, formatDailyStockDate } from '@/lib/daily-stock-date';
 import { formatQuantity, serializedTracking, type ProductTracking } from '@/lib/product-quantity';
 
 interface DailyStockTabProps {
@@ -11,7 +12,7 @@ interface DailyStockTabProps {
 }
 
 export default function DailyStockTab({ products, showMessage }: DailyStockTabProps) {
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(dailyStockBusinessDate);
   const [productId, setProductId] = useState('');
   const [stock, setStock] = useState<DailyStockResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -66,13 +67,13 @@ export default function DailyStockTab({ products, showMessage }: DailyStockTabPr
         </div>
 
         {/* Query card */}
-        <div className="rounded-[28px] border border-white/80 dark:border-slate-700/70 bg-white/88 dark:bg-slate-800/90 p-7 shadow-[0_30px_80px_-36px_rgba(15,23,42,0.30)] backdrop-blur">
+        <div className="relative z-10 rounded-[28px] border border-white/80 dark:border-slate-700/70 bg-white/88 dark:bg-slate-800/90 p-7 shadow-[0_30px_80px_-36px_rgba(15,23,42,0.30)] backdrop-blur">
           <div className="mb-1.5 h-1 w-10 rounded-full bg-linear-to-r from-sky-500 to-orange-400" />
           <div className="mb-6">
             <div className="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300 mb-1">
               Query
             </div>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Select a product and date to view opening and closing stock</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Select a product and date to view opening and closing stock. Dates use Bangladesh time (Asia/Dhaka).</p>
           </div>
 
           <form onSubmit={e => { e.preventDefault(); handleSubmit(); }} className="space-y-5">
@@ -204,7 +205,7 @@ export default function DailyStockTab({ products, showMessage }: DailyStockTabPr
                   Results
                 </div>
                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                  {selected?.name} &mdash; {new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                  {selected?.name} &mdash; {formatDailyStockDate(date)} &middot; {stock.timezone}
                 </p>
               </div>
             </div>
@@ -214,7 +215,7 @@ export default function DailyStockTab({ products, showMessage }: DailyStockTabPr
                 { label: 'Opening Stock', value: formatQuantity(stock.opening, tracking.baseUnit), color: 'from-sky-500 to-blue-600', text: 'text-sky-700 dark:text-sky-300' },
                 { label: 'Closing Stock', value: formatQuantity(stock.closing, tracking.baseUnit), color: 'from-emerald-500 to-sky-500', text: 'text-emerald-700 dark:text-emerald-300' },
                 {
-                  label: 'Movement',
+                  label: 'Net movement',
                   value: `${movement >= 0 ? '+' : ''}${formatQuantity(movement, tracking.baseUnit)}`,
                   color: movement < 0 ? 'from-rose-500 to-orange-400' : 'from-emerald-500 to-teal-500',
                   text: movement < 0 ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300',

@@ -250,11 +250,13 @@ export const realApi = {
     api.post<Customer>('/customers', data),
 
   // Inventory methods
-  getInventory: (params?: { page?: number; limit?: number; lotNumber?: string }) => {
+  getInventory: (params?: { page?: number; limit?: number; lotNumber?: string; status?: InventoryItem['status']; search?: string }) => {
     const q: Record<string, string> = {};
     if (params?.page != null) q.page = String(params.page);
     if (params?.limit != null) q.limit = String(params.limit);
     if (params?.lotNumber) q.lotNumber = params.lotNumber;
+    if (params?.status) q.status = params.status;
+    if (params?.search) q.search = params.search;
     return api.get<InventoryPaginatedResponse>('/inventory/items', Object.keys(q).length ? q : undefined);
   },
   
@@ -409,8 +411,8 @@ export interface InventoryItem {
 }
 
 export interface InventoryPaginatedResponse {
-  page: string;
-  limit: string;
+  page: number;
+  limit: number;
   total: number;
   pageCount: number;
   hasNext: boolean;
@@ -453,6 +455,7 @@ export interface CheckoutResponse { soldItems: InventoryItem[]; salesRecord: { i
 export interface DailyStockResponse {
   opening: number;
   closing: number;
+  timezone: 'Asia/Dhaka';
 }
 
 export interface BarcodeImageResponse {
@@ -498,10 +501,12 @@ export interface SaleLine {
   id: number;
   tenantId: number;
   salesRecordId: number;
-  inventoryItemId: number;
+  inventoryItemId: number | null;
   productId: number;
   product: Product;
-  barcode: string;
+  barcode: string | null;
+  quantity: number;
+  baseUnit: ProductTracking['baseUnit'];
   salePrice: string;
   discountAmount: string;
   netAmount: string;
