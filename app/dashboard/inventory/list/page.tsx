@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { realApi, InventoryItemWithProduct } from '@/lib/api';
@@ -25,6 +25,8 @@ function InventoryListContent({ lotNumber }: { lotNumber: string }) {
   const [inventory, setInventory] = useState<InventoryItemWithProduct[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [pageInput, setPageInput] = useState('1');
+  const [pageInputError, setPageInputError] = useState('');
   const [limitOption, setLimitOption] = useState<LimitOption>(20);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,6 +62,23 @@ function InventoryListContent({ lotNumber }: { lotNumber: string }) {
 
   const pageCount = Math.max(1, Math.ceil(total / limitOption));
 
+  useEffect(() => {
+    setPageInput(String(page));
+    setPageInputError('');
+  }, [page]);
+
+  const handlePageJump = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const target = pageInput.trim();
+    const requestedPage = Number(target);
+    if (!/^\d+$/.test(target) || !Number.isSafeInteger(requestedPage) || requestedPage < 1 || requestedPage > pageCount) {
+      setPageInputError(`Enter a page from 1 to ${pageCount}.`);
+      return;
+    }
+    setPageInputError('');
+    setPage(requestedPage);
+  };
+
   const handleLimitChange = (opt: LimitOption) => {
     setLimitOption(opt);
     setPage(1);
@@ -72,7 +91,12 @@ function InventoryListContent({ lotNumber }: { lotNumber: string }) {
 
   return (
     <>
-      {lotNumber && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200 p-4 text-sm dark:border-sky-800"><span>Stock for lot: <strong>{lotNumber}</strong></span><Link href="/dashboard/inventory/list" className="text-sky-600 underline">Show all inventory</Link></div>}
+      <div className="mx-auto max-w-6xl px-6 pt-6 text-sm text-slate-600 dark:text-slate-300">
+        <Link href="/dashboard/inventory/balances" className="font-semibold text-sky-700 hover:underline dark:text-sky-400">← Stock Overview</Link>
+        <h1 className="mt-3 text-2xl font-semibold text-slate-900 dark:text-slate-100">Serialized Units</h1>
+        <p className="mt-1">Individual barcodes, lots, and unit status are shown here. For quantity-tracked products, use Stock Overview.</p>
+      </div>
+      {lotNumber && <div className="mx-auto mt-4 flex max-w-6xl flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200 p-4 text-sm dark:border-sky-800"><span>Serialized units for lot: <strong>{lotNumber}</strong></span><Link href="/dashboard/inventory/list" className="text-sky-600 underline">Show all serialized units</Link></div>}
       {error && <div role="alert" className="mb-4 rounded-xl bg-rose-50 p-4 text-rose-700 dark:bg-rose-950 dark:text-rose-200">{error} <button className="underline" onClick={() => fetchInventory(page, limitOption, statusFilter, debouncedSearch)}>Try again</button></div>}
       <InventoryListTab
         inventory={inventory}
@@ -107,7 +131,7 @@ function InventoryListContent({ lotNumber }: { lotNumber: string }) {
 
         {/* Pagination */}
         {pageCount > 1 && (
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               disabled={page <= 1 || loading}
               onClick={() => setPage(p => p - 1)}
@@ -115,9 +139,24 @@ function InventoryListContent({ lotNumber }: { lotNumber: string }) {
             >
               Previous
             </button>
-            <span className="text-sm text-slate-500 dark:text-slate-400">
-              Page {page} of {pageCount}
-            </span>
+            <form onSubmit={handlePageJump} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+              <label htmlFor="inventory-page-jump">Page</label>
+              <input
+                id="inventory-page-jump"
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                aria-invalid={!!pageInputError}
+                aria-describedby={pageInputError ? 'inventory-page-jump-error' : undefined}
+                value={pageInput}
+                onChange={event => { setPageInput(event.target.value); setPageInputError(''); }}
+                disabled={loading}
+                className="w-14 rounded-lg border border-slate-200 bg-white px-2 py-2 text-center text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300"
+              />
+              <span>of {pageCount}</span>
+              <button type="submit" disabled={loading} className="font-semibold text-sky-700 hover:underline disabled:opacity-40 dark:text-sky-400">Go</button>
+              {pageInputError && <span id="inventory-page-jump-error" role="alert" className="text-rose-600">{pageInputError}</span>}
+            </form>
             <button
               disabled={page >= pageCount || loading}
               onClick={() => setPage(p => p + 1)}

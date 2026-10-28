@@ -250,10 +250,11 @@ export const realApi = {
     api.post<Customer>('/customers', data),
 
   // Inventory methods
-  getInventory: (params?: { page?: number; limit?: number; lotNumber?: string; status?: InventoryItem['status']; search?: string }) => {
+  getInventory: (params?: { page?: number; limit?: number; productId?: number; lotNumber?: string; status?: InventoryItem['status']; search?: string }) => {
     const q: Record<string, string> = {};
     if (params?.page != null) q.page = String(params.page);
     if (params?.limit != null) q.limit = String(params.limit);
+    if (params?.productId != null) q.productId = String(params.productId);
     if (params?.lotNumber) q.lotNumber = params.lotNumber;
     if (params?.status) q.status = params.status;
     if (params?.search) q.search = params.search;
