@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ProductsPage from '../page';
 import { realApi, type Attribute, type Category, type Product } from '@/lib/api';
 import { getPurchaseCatalog } from '@/lib/purchases';
+import NumberInputWheelGuard from '@/app/components/NumberInputWheelGuard';
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ replace: jest.fn() }) }));
 jest.mock('@/lib/auth-context', () => ({ useAuth: () => ({ token: 'test-token', loading: false }) }));
@@ -41,7 +42,7 @@ beforeEach(() => {
 });
 
 it('prevents the focused price field from changing during page scrolling', async () => {
-  render(<ProductsPage />);
+  render(<><NumberInputWheelGuard /><ProductsPage /></>);
   await screen.findByText('Rice');
   fireEvent.click(screen.getByRole('button', { name: 'Add Product' }));
 
