@@ -36,7 +36,7 @@ export default function InventoryMovementsPage() {
   const data = ledger.data;
   const pages = data ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
   return <div className="mx-auto max-w-6xl space-y-5 pb-8">
-    <nav aria-label="Breadcrumb" className="text-sm text-slate-500"><Link href="/dashboard/inventory/list">Inventory</Link> / Movements</nav>
+    <nav aria-label="Breadcrumb" className="text-sm text-slate-500"><Link href="/dashboard/inventory/balances">Stock Overview</Link> / Movements</nav>
     <header className="flex flex-wrap justify-between gap-3"><div><h1 className="text-2xl font-semibold">Inventory Movements</h1><p className="text-sm text-slate-500">See what changed in stock and trace its source. History is read-only.</p></div><button className={salesSecondary} onClick={ledger.reload}>Refresh</button></header>
     <form onSubmit={apply} className={`${salesCard} space-y-4`}>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
