@@ -221,20 +221,65 @@ function LotNumberField({ value, onChange, required = false, label = 'Lot Number
 
 // ── Single Item ───────────────────────────────────────────────────────────────
 
+interface ResolvedReturnItem {
+  barcode: string;
+  lotNumber: string;
+  productId: number;
+  productName: string;
+}
+
+async function resolveReturnItem(barcode: string): Promise<ResolvedReturnItem> {
+  const item = await realApi.scanBarcode(barcode);
+  if (item.status !== 'in_stock') throw new Error('Only in-stock items can be returned to a supplier.');
+  if (!item.lotNumber) throw new Error('This item has no lot number. It cannot be returned to a supplier from this form.');
+  return { barcode: item.barcode, lotNumber: item.lotNumber, productId: item.productId, productName: item.product.name };
+}
+
 function SingleItemForm({ onSuccess, showMessage }: AdjustTabProps) {
   const [barcode, setBarcode] = useState('');
-  const [lotNumber, setLotNumber] = useState('');
+  const [resolved, setResolved] = useState<ResolvedReturnItem | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [lookupError, setLookupError] = useState('');
   const [notes, setNotes] = useState('');
   const [itemNotes, setItemNotes] = useState('');
-  const mutation = useDurableInventoryMutation<SupplierReturnInput, unknown>('supplier-return-single', (payload, key) => realApi.createReturn(payload, key), () => { showMessage('success', `Item ${barcode} returned successfully`); setBarcode(''); setLotNumber(''); setNotes(''); setItemNotes(''); onSuccess(); });
+  const lookupVersion = useRef(0);
+  const mutation = useDurableInventoryMutation<SupplierReturnInput, unknown>('supplier-return-single', (payload, key) => realApi.createReturn(payload, key), () => { showMessage('success', `Item ${barcode} returned successfully`); setBarcode(''); setResolved(null); setLookupError(''); setNotes(''); setItemNotes(''); onSuccess(); });
+
+  const changeBarcode = (value: string) => {
+    lookupVersion.current += 1;
+    setBarcode(value);
+    setResolved(null);
+    setChecking(false);
+    setLookupError('');
+  };
+
+  const checkBarcode = async () => {
+    const value = barcode.trim();
+    if (!value || mutation.busy || mutation.pending) return;
+    const version = ++lookupVersion.current;
+    setChecking(true);
+    setResolved(null);
+    setLookupError('');
+    try {
+      const item = await resolveReturnItem(value);
+      if (version === lookupVersion.current) setResolved(item);
+    } catch (cause) {
+      if (version === lookupVersion.current) setLookupError(cause instanceof Error ? cause.message : 'Unable to find this barcode. Try again.');
+    } finally {
+      if (version === lookupVersion.current) setChecking(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!barcode.trim()) return;
+    if (!resolved || checking) {
+      setLookupError('Find the barcode and confirm its lot before submitting.');
+      return;
+    }
     mutation.run({
         type: 'supplier_return',
-        ...(lotNumber.trim() && { lotNumber: lotNumber.trim() }),
-        items: [{ barcode: barcode.trim(), ...(itemNotes.trim() && { notes: itemNotes.trim() }) }],
+        lotNumber: resolved.lotNumber,
+        items: [{ barcode: resolved.barcode, ...(itemNotes.trim() && { notes: itemNotes.trim() }) }],
         ...(notes.trim() && { notes: notes.trim() }),
       });
   };
@@ -242,21 +287,25 @@ function SingleItemForm({ onSuccess, showMessage }: AdjustTabProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <div>
-        <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Barcode *</label>
+        <label htmlFor="supplier-return-barcode" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Barcode *</label>
         <div className="relative">
           <svg className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
           </svg>
           <input
+            id="supplier-return-barcode"
             type="text"
             value={barcode}
-            onChange={e => setBarcode(e.target.value)}
+            onChange={e => changeBarcode(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void checkBarcode(); } }}
             placeholder="Scan or enter barcode..."
             required
             autoFocus
             className="w-full rounded-2xl border border-slate-200 dark:border-slate-600 bg-slate-50/70 dark:bg-slate-700/50 pl-10 pr-4 py-3 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-sky-400 dark:focus:border-sky-500 focus:bg-white dark:focus:bg-slate-700 focus:ring-4 focus:ring-sky-100 dark:focus:ring-sky-900/50"
           />
         </div>
+        <button type="button" onClick={() => void checkBarcode()} disabled={!barcode.trim() || checking || mutation.busy || !!mutation.pending} className="mt-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700 transition hover:bg-sky-100 disabled:opacity-50 dark:border-sky-700 dark:bg-sky-900/20 dark:text-sky-300">{checking ? 'Finding item…' : 'Find item and lot'}</button>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Scan and press Enter, or find the item to confirm its lot before returning it.</p>
       </div>
 
       <div>
@@ -272,7 +321,7 @@ function SingleItemForm({ onSuccess, showMessage }: AdjustTabProps) {
         />
       </div>
 
-      <LotNumberField value={lotNumber} onChange={setLotNumber} />
+      {resolved && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-700/50 dark:bg-emerald-900/20 dark:text-emerald-200"><p className="font-semibold">Item found</p><p>{resolved.productName} · <span className="font-mono">{resolved.barcode}</span></p><p>Lot: <span className="font-mono">{resolved.lotNumber}</span></p></div>}
 
       <div>
         <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -287,9 +336,9 @@ function SingleItemForm({ onSuccess, showMessage }: AdjustTabProps) {
         />
       </div>
 
-      {mutation.error && <p role="alert" className="text-sm text-rose-600">{mutation.error}</p>}
+      {(lookupError || mutation.error) && <p role="alert" className="text-sm text-rose-600">{lookupError || mutation.error}</p>}
       {mutation.pending && <button type="button" onClick={mutation.retry} disabled={mutation.busy} className="rounded-xl border px-4 py-2 text-sm font-semibold">Retry saved return</button>}
-      <SubmitButton loading={mutation.busy} disabled={!mutation.ready || !!mutation.pending || !barcode.trim()} label="Submit Return" />
+      <SubmitButton loading={mutation.busy} disabled={!mutation.ready || !!mutation.pending || !resolved || checking} label="Submit Return" />
     </form>
   );
 }
@@ -300,29 +349,73 @@ interface BatchRow { id: number; barcode: string; notes: string }
 
 function BatchItemsForm({ onSuccess, showMessage }: AdjustTabProps) {
   const [rows, setRows] = useState<BatchRow[]>([{ id: 1, barcode: '', notes: '' }]);
-  const [lotNumber, setLotNumber] = useState('');
+  const [resolved, setResolved] = useState<{ signature: string; lotNumber: string; items: ResolvedReturnItem[] } | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [lookupError, setLookupError] = useState('');
   const [notes, setNotes] = useState('');
-  const mutation = useDurableInventoryMutation<SupplierReturnInput, unknown>('supplier-return-batch', (payload, key) => realApi.createReturn(payload, key), () => { showMessage('success', 'Items returned successfully'); setRows([{ id: Date.now(), barcode: '', notes: '' }]); setLotNumber(''); setNotes(''); onSuccess(); });
+  const lookupVersion = useRef(0);
+  const mutation = useDurableInventoryMutation<SupplierReturnInput, unknown>('supplier-return-batch', (payload, key) => realApi.createReturn(payload, key), () => { showMessage('success', 'Items returned successfully'); setRows([{ id: Date.now(), barcode: '', notes: '' }]); setResolved(null); setLookupError(''); setNotes(''); onSuccess(); });
 
-  const updateRow = (id: number, field: keyof Omit<BatchRow, 'id'>, value: string) =>
+  const invalidateLookup = () => {
+    lookupVersion.current += 1;
+    setResolved(null);
+    setChecking(false);
+    setLookupError('');
+  };
+
+  const updateRow = (id: number, field: keyof Omit<BatchRow, 'id'>, value: string) => {
+    if (field === 'barcode') invalidateLookup();
     setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+  };
 
-  const addRow = () => setRows(prev => [...prev, { id: Date.now(), barcode: '', notes: '' }]);
-  const removeRow = (id: number) => setRows(prev => prev.filter(r => r.id !== id));
+  const addRow = () => { invalidateLookup(); setRows(prev => [...prev, { id: Date.now(), barcode: '', notes: '' }]); };
+  const removeRow = (id: number) => { invalidateLookup(); setRows(prev => prev.filter(r => r.id !== id)); };
+
+  const enteredRows = rows.filter(row => row.barcode.trim());
+  const signature = JSON.stringify(enteredRows.map(row => row.barcode.trim()));
+  const checkItems = async () => {
+    if (!enteredRows.length || mutation.busy || mutation.pending) return;
+    const barcodes = enteredRows.map(row => row.barcode.trim());
+    if (new Set(barcodes.map(value => value.toLowerCase())).size !== barcodes.length) {
+      setLookupError('Remove duplicate barcodes before returning these items.');
+      setResolved(null);
+      return;
+    }
+    const version = ++lookupVersion.current;
+    setChecking(true);
+    setResolved(null);
+    setLookupError('');
+    try {
+      const items = await Promise.all(barcodes.map(resolveReturnItem));
+      if (version !== lookupVersion.current) return;
+      const first = items[0];
+      if (items.some(item => item.lotNumber !== first.lotNumber || item.productId !== first.productId)) {
+        setLookupError('All barcodes in a batch return must belong to the same product and lot.');
+        return;
+      }
+      setResolved({ signature, lotNumber: first.lotNumber, items });
+    } catch (cause) {
+      if (version === lookupVersion.current) setLookupError(cause instanceof Error ? cause.message : 'Unable to check these barcodes. Try again.');
+    } finally {
+      if (version === lookupVersion.current) setChecking(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const validItems = rows.filter(r => r.barcode.trim());
-    if (validItems.length === 0) return;
+    if (!resolved || checking || resolved.signature !== signature) {
+      setLookupError('Check the barcodes and confirm their lot before submitting.');
+      return;
+    }
     mutation.run({
         type: 'supplier_return',
-        ...(lotNumber.trim() && { lotNumber: lotNumber.trim() }),
-        items: validItems.map(r => ({ barcode: r.barcode.trim(), ...(r.notes.trim() && { notes: r.notes.trim() }) })),
+        lotNumber: resolved.lotNumber,
+        items: resolved.items.map((item, index) => ({ barcode: item.barcode, ...(enteredRows[index].notes.trim() && { notes: enteredRows[index].notes.trim() }) })),
         ...(notes.trim() && { notes: notes.trim() }),
       });
   };
 
-  const hasAnyBarcode = rows.some(r => r.barcode.trim());
+  const hasAnyBarcode = enteredRows.length > 0;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -343,6 +436,7 @@ function BatchItemsForm({ onSuccess, showMessage }: AdjustTabProps) {
                   type="text"
                   value={row.barcode}
                   onChange={e => updateRow(row.id, 'barcode', e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void checkItems(); } }}
                   placeholder={`Barcode ${idx + 1}`}
                   autoFocus={idx === 0}
                   className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50/70 dark:bg-slate-700/50 pl-9 pr-3 py-2.5 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-sky-400 dark:focus:border-sky-500 focus:bg-white dark:focus:bg-slate-700 focus:ring-4 focus:ring-sky-100 dark:focus:ring-sky-900/50"
@@ -380,7 +474,11 @@ function BatchItemsForm({ onSuccess, showMessage }: AdjustTabProps) {
         </button>
       </div>
 
-      <LotNumberField value={lotNumber} onChange={setLotNumber} />
+      <div>
+        <button type="button" onClick={() => void checkItems()} disabled={!hasAnyBarcode || checking || mutation.busy || !!mutation.pending} className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700 transition hover:bg-sky-100 disabled:opacity-50 dark:border-sky-700 dark:bg-sky-900/20 dark:text-sky-300">{checking ? 'Checking items…' : 'Check item lots'}</button>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">All items in one return must come from the same product and lot.</p>
+      </div>
+      {resolved && resolved.signature === signature && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-700/50 dark:bg-emerald-900/20 dark:text-emerald-200"><p className="font-semibold">{resolved.items.length} items found</p><p>{resolved.items[0].productName} · Lot <span className="font-mono">{resolved.lotNumber}</span></p></div>}
 
       <div>
         <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -395,9 +493,9 @@ function BatchItemsForm({ onSuccess, showMessage }: AdjustTabProps) {
         />
       </div>
 
-      {mutation.error && <p role="alert" className="text-sm text-rose-600">{mutation.error}</p>}
+      {(lookupError || mutation.error) && <p role="alert" className="text-sm text-rose-600">{lookupError || mutation.error}</p>}
       {mutation.pending && <button type="button" onClick={mutation.retry} disabled={mutation.busy} className="rounded-xl border px-4 py-2 text-sm font-semibold">Retry saved return</button>}
-      <SubmitButton loading={mutation.busy} disabled={!mutation.ready || !!mutation.pending || !hasAnyBarcode} label={`Return ${rows.filter(r => r.barcode.trim()).length || ''} Item${rows.filter(r => r.barcode.trim()).length !== 1 ? 's' : ''}`} />
+      <SubmitButton loading={mutation.busy} disabled={!mutation.ready || !!mutation.pending || !resolved || checking || resolved.signature !== signature} label={`Return ${enteredRows.length || ''} Item${enteredRows.length !== 1 ? 's' : ''}`} />
     </form>
   );
 }
