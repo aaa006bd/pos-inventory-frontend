@@ -85,3 +85,15 @@ This compatibility is temporary. After the backend response and Swagger contract
 ## Related open documentation cleanup
 
 The purchase receipt operation has also been observed documenting the case-insensitive `Idempotency-Key` header twice with conflicting required flags. Consolidate it into one required header definition. This is independent of product pagination but belongs in the same contract cleanup pass.
+
+## Implemented locally: Sales History search and return filter
+
+Reviewed: 2026-11-01. Live local Swagger now documents `GET /sales` with `search`, `hasReturns`, pagination, and `returnedAmount`. Sales History sends these filters to the backend and resets to page 1 when they change; it does not filter the current page in the browser. Authenticated deployment verification remains to be done.
+
+Verified contract: `search` is a case-insensitive partial match on `saleNumber` or linked customer phone; `hasReturns=true` selects sales with any returned line quantity. Both apply before count and pagination and may be combined. The list response uses `{ items, total, page, limit, pageCount, hasNext }` and includes `returnedAmount` on each sale.
+
+### Backend regression observed on 2026-11-01
+
+An authenticated read-only request to the running local backend, `GET /sales?hasReturns=true&page=1&limit=100`, returned all four sales (`total: 4`, IDs 8, 3, 2, 1). Only sale 8 had returned line quantities; the other three had `returnedAmount: 0` and every `returnedQuantity: 0`. The unfiltered request returned the same four sales. Combining `hasReturns=true` with a search for non-returned sale 3 still returned that sale (`total: 1`). The query parameter is documented but not applied in the running backend.
+
+Backend should filter by existence of a sale line with `returnedQuantity > 0` before pagination and total counting, while preserving tenant scoping and combination with `search`. The expected local result for the first request is `total: 1`, item ID 8; searching the non-returned sale with `hasReturns=true` should return `total: 0`. Add backend regression tests for both cases. Until fixed, the frontend rejects a returned-sales response containing non-returned rows instead of showing misleading results.

@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import Link from 'next/link';
 import { realApi, type Product, type SupplierReturnInput } from '@/lib/api';
 import { useDurableInventoryMutation } from './useDurableInventoryMutation';
 import { getPurchaseCatalog } from '@/lib/purchases';
 import { createQuantityAdjustment, validateQuantityAdjustment, type QuantityAdjustmentInput, type QuantityAdjustmentReason, type QuantityAdjustmentResult } from '@/lib/quantity-adjustments';
 
-type ReturnMode = 'quantity' | 'single' | 'batch' | 'lot';
+type ReturnMode = 'quantity' | 'single' | 'batch' | 'lot' | 'sales';
 
 interface AdjustTabProps {
   onSuccess: () => void;
@@ -18,6 +19,7 @@ const MODES: { value: ReturnMode; label: string; description: string }[] = [
   { value: 'single', label: 'Single Item', description: 'Return one item by barcode' },
   { value: 'batch', label: 'Batch Items', description: 'Return multiple items at once' },
   { value: 'lot', label: 'Lot Return', description: 'Return an entire lot' },
+  { value: 'sales', label: 'Sales Return', description: 'Return items from an original customer sale' },
 ];
 
 function QuantityAdjustmentForm({ onSuccess, showMessage }: AdjustTabProps) {
@@ -499,7 +501,7 @@ export default function AdjustTab({ onSuccess, showMessage }: AdjustTabProps) {
 
         {/* Mode picker */}
         <div className="rounded-[28px] border border-white/80 dark:border-slate-700/70 bg-white/88 dark:bg-slate-800/90 p-2 shadow-[0_10px_35px_-22px_rgba(15,23,42,0.20)] backdrop-blur">
-          <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-1 sm:grid-cols-5">
             {MODES.map(m => (
               <button
                 key={m.value}
@@ -534,6 +536,7 @@ export default function AdjustTab({ onSuccess, showMessage }: AdjustTabProps) {
           {mode === 'single' && <SingleItemForm onSuccess={onSuccess} showMessage={showMessage} />}
           {mode === 'batch'  && <BatchItemsForm  onSuccess={onSuccess} showMessage={showMessage} />}
           {mode === 'lot'    && <LotReturnForm   onSuccess={onSuccess} showMessage={showMessage} />}
+          {mode === 'sales' && <div className="space-y-4 text-sm text-slate-700 dark:text-slate-300"><p>Find the original sale, open its sold items, and select the quantity or serialized units to return. This keeps the return linked to the sale and calculates the refund correctly.</p><Link className="inline-flex rounded-xl bg-slate-950 px-4 py-2 font-semibold text-white dark:bg-slate-100 dark:text-slate-900" href="/dashboard/sales/history">Find sale to return</Link></div>}
         </div>
 
       </div>

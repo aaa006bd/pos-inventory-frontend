@@ -54,6 +54,14 @@ describe('API client', () => {
     expect((options?.headers as Headers).get('Authorization')).toBe('Bearer test-token');
   });
 
+  it('sends server-side sales search and return filters before pagination', async () => {
+    fetchMock.mockResolvedValue(mockResponse({ body: JSON.stringify({ items: [], total: 0, page: 2, limit: 20, pageCount: 0, hasNext: false }) }));
+
+    await realApi.getSales({ page: 2, limit: 20, search: '01712345678', hasReturns: true });
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/backend-api/sales?page=2&limit=20&search=01712345678&hasReturns=true');
+  });
+
   it('returns text without trying to parse JSON', async () => {
     fetchMock.mockResolvedValue(
       mockResponse({ body: '<svg>barcode</svg>' }),

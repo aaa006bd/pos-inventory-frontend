@@ -1,8 +1,7 @@
-import { notFound } from 'next/navigation';
-import SaleRecordDetail from '../../orders/_components/sale-record-detail';
+import { notFound, redirect } from 'next/navigation';
 
-export default async function SaleRecordPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function LegacySaleRecordPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!/^\d+$/.test(id) || !Number.isSafeInteger(Number(id)) || Number(id) < 1) notFound();
-  return <SaleRecordDetail id={Number(id)} />;
+  redirect(`/dashboard/sales/history/${id}`);
 }

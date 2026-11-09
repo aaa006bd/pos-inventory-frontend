@@ -36,7 +36,7 @@ function SalesOrderContent({ order, reload }: { order: SalesOrder; reload: () =>
     {order.notes && <section className={salesCard}><h2 className="mb-2 font-semibold">Order notes</h2><p className="whitespace-pre-wrap break-words text-sm">{order.notes}</p></section>}
     {order.cancellationReason && <section className={salesCard}><h2 className="mb-2 font-semibold">Cancellation reason</h2><p className="whitespace-pre-wrap break-words text-sm">{order.cancellationReason}</p></section>}
     <SalesOrderActions order={order} reload={reload} />
-    <Link href="/dashboard/sales/records" className={salesSecondary}>View sales and documents</Link>
+    <Link href="/dashboard/sales/history" className={salesSecondary}>View sales and documents</Link>
     <Link href="/dashboard/sales/orders" className={salesSecondary}>Back to sales orders</Link>
   </SalesShell>;
 }
