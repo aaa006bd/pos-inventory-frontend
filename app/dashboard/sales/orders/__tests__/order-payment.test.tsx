@@ -18,7 +18,7 @@ it('shows the sale reference before payment and actual allocation afterward', as
   jest.spyOn(customerPaymentsApi, 'execute').mockResolvedValue({ ...payment, allocations: [{ id: 1, salesRecordId: 3, salesOrderId: 25, amount: 50, balanceAfter: 30, allocatedAt: '2026-09-18', reversedAt: null, reversalReason: null }] });
   render(<OrderPayment order={order} sales={sales} outstanding={80} onRecorded={jest.fn()} />);
   fireEvent.click(screen.getByRole('button', { name: 'Record payment' }));
-  expect(screen.getByRole('link', { name: 'SALE-EXAMPLE' })).toHaveAttribute('href', '/dashboard/sales/records/3');
+  expect(screen.getByRole('link', { name: 'SALE-EXAMPLE' })).toHaveAttribute('href', '/dashboard/sales/history/3');
   fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '50' } });
   expect(screen.getByRole('row', { name: /SALE-EXAMPLE/ })).toHaveTextContent('80.0050.0030.00');
   fireEvent.click(screen.getByRole('button', { name: 'Confirm payment' }));

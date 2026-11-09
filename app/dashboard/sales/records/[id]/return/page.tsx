@@ -1,8 +1,7 @@
-import { notFound } from 'next/navigation';
-import CustomerReturn from '../../../orders/_components/customer-return';
+import { notFound, redirect } from 'next/navigation';
 
-export default async function CustomerReturnPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function LegacyCustomerReturnPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (!/^\d+$/.test(id) || Number(id) < 1) notFound();
-  return <CustomerReturn saleId={Number(id)} />;
+  if (!/^\d+$/.test(id) || !Number.isSafeInteger(Number(id)) || Number(id) < 1) notFound();
+  redirect(`/dashboard/sales/history/${id}?action=return`);
 }

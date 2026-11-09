@@ -317,10 +317,13 @@ export const realApi = {
     api.post<Expense>('/accounting/expenses', data),
 
   // Sales history methods
-  getSales: (params?: { page?: number; limit?: number }) => {
-    const query = params ? `?${new URLSearchParams(params as Record<string, string>)}` : '';
-    return api.get<SalesListResponse>(`/sales${query}`);
-  },
+  getSales: (params?: { page?: number; limit?: number; search?: string; hasReturns?: boolean }) =>
+    api.get<SalesListResponse>('/sales', {
+      page: params?.page,
+      limit: params?.limit,
+      search: params?.search,
+      hasReturns: params?.hasReturns,
+    }),
 
   getSale: (id: number) =>
     api.get<SaleRecord>(`/sales/${id}`),
@@ -506,6 +509,7 @@ export interface SaleLine {
   product: Product;
   barcode: string | null;
   quantity: number;
+  returnedQuantity?: number | string | null;
   baseUnit: ProductTracking['baseUnit'];
   salePrice: string;
   discountAmount: string;
@@ -533,6 +537,7 @@ export interface SaleRecord {
   grossAmount: string;
   discountAmount: string;
   netAmount: string;
+  returnedAmount?: number | string | null;
   totalCost: string;
   status: string;
   soldAt: string;

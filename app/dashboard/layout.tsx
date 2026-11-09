@@ -23,7 +23,6 @@ const navItems = [
 const salesItems = [
   { href: '/dashboard/inventory/sell', label: 'POS Checkout', icon: 'sell' },
   { href: '/dashboard/sales/orders', label: 'Sales Orders', icon: 'inventory' },
-  { href: '/dashboard/sales/records', label: 'Sales Records', icon: 'history' },
   { href: '/dashboard/sales/payments', label: 'Customer Payments', icon: 'finance' },
   { href: '/dashboard/sales/history', label: 'Sales History', icon: 'history' },
 ];

@@ -28,7 +28,7 @@ export async function getInventoryMovements(filters: MovementFilters, page: numb
   return response;
 }
 export function movementSourceLink(row: InventoryMovement): string | undefined {
-  if (row.referenceType === 'SALES_RECORD' && row.referenceId) return `/dashboard/sales/records/${row.referenceId}`;
+  if (row.referenceType === 'SALES_RECORD' && row.referenceId) return `/dashboard/sales/history/${row.referenceId}`;
   if (row.referenceType === 'PRODUCTION_ORDER' && row.referenceId) return `/dashboard/production/orders/${row.referenceId}`;
   if (row.referenceType === 'INVENTORY_LOT' && row.inventoryItemId !== null && row.sourceDocumentNumber) return `/dashboard/inventory/list?lotNumber=${encodeURIComponent(row.sourceDocumentNumber)}`;
 }

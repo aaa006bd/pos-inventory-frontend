@@ -20,7 +20,7 @@ it('keeps the server total delta rather than summing the current page', async ()
   expect((await getInventoryMovements(emptyMovementFilters, 1)).netQuantityDelta).toBe(-12);
 });
 it('links only supported destinations and labels status-only movements', () => {
-  expect(movementSourceLink({ referenceType: 'SALES_RECORD', referenceId: 3 } as InventoryMovement)).toBe('/dashboard/sales/records/3');
+  expect(movementSourceLink({ referenceType: 'SALES_RECORD', referenceId: 3 } as InventoryMovement)).toBe('/dashboard/sales/history/3');
   expect(movementSourceLink({ referenceType: 'PRODUCTION_ORDER', referenceId: 8 } as InventoryMovement)).toBe('/dashboard/production/orders/8');
   expect(movementSourceLink({ referenceType: 'INVENTORY_RETURN', referenceId: 3 } as InventoryMovement)).toBeUndefined();
   expect(movementDelta(0)).toBe('0 Status change');

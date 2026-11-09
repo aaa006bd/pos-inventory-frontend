@@ -28,7 +28,7 @@ it('shows mixed units separately and uses product history when no inventory unit
 
 it('shows source links and filtered totals and opens item history', async () => {
   render(<InventoryMovementsPage />);
-  expect(await screen.findByRole('link', { name: 'SALE-3' })).toHaveAttribute('href', '/dashboard/sales/records/3');
+  expect(await screen.findByRole('link', { name: 'SALE-3' })).toHaveAttribute('href', '/dashboard/sales/history/3');
   expect(screen.getByText('-10 piece')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'View movement 1' }));
   expect(screen.getByText('In stock → Sold')).toBeInTheDocument();
