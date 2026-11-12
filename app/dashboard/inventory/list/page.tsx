@@ -16,11 +16,14 @@ export default function InventoryListPage() {
 }
 
 function InventoryListRoute() {
-  const lotNumber = useSearchParams().get('lotNumber') ?? '';
-  return <InventoryListContent key={lotNumber} lotNumber={lotNumber} />;
+  const searchParams = useSearchParams();
+  const lotNumber = searchParams.get('lotNumber') ?? '';
+  const rawProductId = searchParams.get('productId') ?? '';
+  const productId = /^\d+$/.test(rawProductId) && Number.isSafeInteger(Number(rawProductId)) && Number(rawProductId) > 0 ? Number(rawProductId) : undefined;
+  return <InventoryListContent key={`${lotNumber}:${productId ?? ''}`} lotNumber={lotNumber} productId={productId} />;
 }
 
-function InventoryListContent({ lotNumber }: { lotNumber: string }) {
+function InventoryListContent({ lotNumber, productId }: { lotNumber: string; productId?: number }) {
   const { token } = useAuth();
   const [inventory, setInventory] = useState<InventoryItemWithProduct[]>([]);
   const [total, setTotal] = useState(0);
@@ -38,7 +41,7 @@ function InventoryListContent({ lotNumber }: { lotNumber: string }) {
     setLoading(true);
     setError('');
     try {
-      const res = await realApi.getInventory({ page: p, limit: lim, lotNumber: lotNumber || undefined, status: status === 'all' ? undefined : status, search: search || undefined });
+      const res = await realApi.getInventory({ page: p, limit: lim, ...(productId ? { productId } : {}), lotNumber: lotNumber || undefined, status: status === 'all' ? undefined : status, search: search || undefined });
       setInventory(res.items);
       setTotal(res.total);
     } catch (err) {
@@ -46,7 +49,7 @@ function InventoryListContent({ lotNumber }: { lotNumber: string }) {
     } finally {
       setLoading(false);
     }
-  }, [lotNumber]);
+  }, [lotNumber, productId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -96,7 +99,7 @@ function InventoryListContent({ lotNumber }: { lotNumber: string }) {
         <h1 className="mt-3 text-2xl font-semibold text-slate-900 dark:text-slate-100">Serialized Units</h1>
         <p className="mt-1">Individual barcodes, lots, and unit status are shown here. For quantity-tracked products, use Stock Overview.</p>
       </div>
-      {lotNumber && <div className="mx-auto mt-4 flex max-w-6xl flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200 p-4 text-sm dark:border-sky-800"><span>Serialized units for lot: <strong>{lotNumber}</strong></span><Link href="/dashboard/inventory/list" className="text-sky-600 underline">Show all serialized units</Link></div>}
+      {(lotNumber || productId) && <div className="mx-auto mt-4 flex max-w-6xl flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200 p-4 text-sm dark:border-sky-800"><span>{productId && <>Serialized units for product <strong>#{productId}</strong></>}{productId && lotNumber && ' · '}{lotNumber && <>Lot: <strong>{lotNumber}</strong></>}</span><Link href="/dashboard/inventory/list" className="text-sky-600 underline">Show all serialized units</Link></div>}
       {error && <div role="alert" className="mb-4 rounded-xl bg-rose-50 p-4 text-rose-700 dark:bg-rose-950 dark:text-rose-200">{error} <button className="underline" onClick={() => fetchInventory(page, limitOption, statusFilter, debouncedSearch)}>Try again</button></div>}
       <InventoryListTab
         inventory={inventory}

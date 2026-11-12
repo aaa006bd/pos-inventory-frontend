@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
+import { dashboardPageTitle } from '@/lib/dashboard-title';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: 'home' },
@@ -277,9 +278,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  const segments = pathname.split('/').filter(Boolean);
-  const rawTitle = segments.length ? segments[segments.length - 1] : 'dashboard';
-  const pageTitle = rawTitle.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const section = [...navItems, ...salesItems, ...purchasingItems, ...productionItems]
+    .filter(item => isItemActive(pathname, item.href))
+    .sort((a, b) => b.href.length - a.href.length)[0];
+  const pageTitle = dashboardPageTitle(pathname, section?.label);
   const activeItem = navItems.find((item) => isItemActive(pathname, item.href)) ?? navItems[0];
   const userEmail = user?.email ?? 'Signed-in user';
   const userLabel = user?.role

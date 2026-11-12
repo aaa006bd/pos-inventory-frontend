@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import { useCallback, useRef, useState, type FormEvent } from 'react';
 import { ApiError } from '@/lib/api';
-import { canReceive, remainingQuantity, purchasesApi, validateReceipt, purchaseError, uncertainMutation, formatAmount, type PurchaseOrder, type PurchaseReceiptResult, type PurchaseReceiptInput } from '@/lib/purchases';
+import { canReceive, remainingQuantity, purchasesApi, validateReceipt, purchaseError, uncertainMutation, formatAmount, getPurchaseCatalog, type PurchaseOrder, type PurchaseReceiptResult, type PurchaseReceiptInput } from '@/lib/purchases';
 import { readReceiptAttempt, createReceiptAttempt, clearReceiptAttempt, canRetryReceiptAttempt, type ReceiptAttempt } from '@/lib/purchase-receipt-attempt';
 import { usePurchaseResource } from './use-purchase-resource';
 import { PurchaseShell, PurchaseBadge, PurchaseError, PurchaseLoading, purchaseButton, purchaseSecondary, purchaseInput, purchaseCard } from './purchase-ui';
 import PurchaseReceiptPrintButton from './purchase-receipt-print-button';
 import { formatQuantity } from '@/lib/product-quantity';
+import { currentSellingPrice } from '@/lib/stock-pricing';
 
 export default function PurchaseReceive({ id }: { id: number }) {
   const load = useCallback(() => purchasesApi.get(id), [id]);
@@ -96,6 +97,7 @@ function ReceiptSession({ order, reload }: { order: PurchaseOrder; reload: () =>
 
 function ReceiveForm({ order, onReceive }: { order: PurchaseOrder; onReceive: (input: PurchaseReceiptInput) => void }) {
   const outstanding = order.lines.filter(line => remainingQuantity(line) > 0);
+  const catalog = usePurchaseResource(getPurchaseCatalog);
   const [rows, setRows] = useState(() => outstanding.map(line => ({ purchaseOrderLineId: line.id, quantity: '', lotNumber: '', notes: '' })));
   const [reviewing, setReviewing] = useState(false);
   const [error, setError] = useState('');
@@ -112,8 +114,8 @@ function ReceiveForm({ order, onReceive }: { order: PurchaseOrder; onReceive: (i
   return <form onSubmit={submit} className="space-y-5">
     <div className={`${purchaseCard} flex flex-wrap items-center justify-between gap-3`}><div><p className="font-semibold">{order.orderNumber}</p><p className="text-sm text-slate-500">{order.supplier.name}</p></div><PurchaseBadge status={order.status} /></div>
     {error && <PurchaseError message={error} />}
-    {reviewing && <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-200"><h2 className="font-semibold">Review this delivery</h2><p className="mt-1">Receive {input.items.length} product line{input.items.length === 1 ? '' : 's'}. Confirm only after checking the physical delivery.</p></div>}
-    <fieldset disabled={reviewing} className="space-y-4">
+    {reviewing && <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-200"><h2 className="font-semibold">Review this delivery</h2><p className="mt-1">Confirm these quantities only after checking the physical delivery. Purchase cost comes from the confirmed order.</p></div>}
+    <fieldset disabled={reviewing} hidden={reviewing} className="space-y-4">
       <div className="flex items-center justify-between gap-3"><h2 className="font-semibold">Outstanding items</h2><button type="button" className={purchaseSecondary} onClick={() => setRows(previous => previous.map(row => ({ ...row, quantity: String(remainingQuantity(order.lines.find(line => line.id === row.purchaseOrderLineId)!)) })))}>Fill outstanding quantities</button></div>
       {outstanding.map(line => {
         const row = rows.find(row => row.purchaseOrderLineId === line.id)!;
@@ -126,6 +128,26 @@ function ReceiveForm({ order, onReceive }: { order: PurchaseOrder; onReceive: (i
         </div>;
       })}
     </fieldset>
+    {reviewing && <section className={`${purchaseCard} space-y-4`} aria-label="Receipt review">
+      {input.items.map(item => {
+        const line = order.lines.find(line => line.id === item.purchaseOrderLineId)!;
+        const unit = line.product.baseUnit ?? 'piece';
+        const sellingPrice = currentSellingPrice(catalog.data?.find(product => product.id === line.productId));
+        const receiptValue = Number(line.unitCost) * item.quantity;
+        return <div key={item.purchaseOrderLineId} className="space-y-3 border-b border-slate-100 pb-4 last:border-0 last:pb-0 dark:border-slate-700">
+          <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">{line.product.name}</h3><span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 dark:bg-sky-950 dark:text-sky-300">{line.product.trackingMode === 'QUANTITY' ? 'Quantity' : 'Serialized'} · {unit}</span></div>
+          <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <div><dt className="text-slate-500">Receive now</dt><dd className="font-semibold tabular-nums">{formatQuantity(item.quantity, unit)}</dd></div>
+            <div><dt className="text-slate-500">Purchase cost</dt><dd className="font-semibold tabular-nums">৳{formatAmount(line.unitCost)} / {unit}</dd></div>
+            <div><dt className="text-slate-500">Current selling price</dt><dd className="font-semibold tabular-nums">{sellingPrice === null ? (catalog.loading ? 'Loading…' : 'Unavailable') : `৳${formatAmount(sellingPrice)} / ${unit}`}</dd></div>
+            <div><dt className="text-slate-500">Estimated receipt value</dt><dd className="font-semibold tabular-nums">{Number.isFinite(receiptValue) ? `৳${formatAmount(receiptValue)}` : '—'}</dd></div>
+          </dl>
+          {item.lotNumber && <p className="text-xs text-slate-500">Lot: {item.lotNumber}</p>}
+        </div>;
+      })}
+      <p className="text-xs text-slate-500">The selling price applies to future sales of this product, not to this receipt’s cost. <Link href="/dashboard/products" className="font-semibold text-sky-700 underline dark:text-sky-300">Manage product price</Link></p>
+      {catalog.error && <p className="text-xs text-amber-700 dark:text-amber-300">Product prices could not be loaded. You can still confirm the physical receipt; check the product price before selling.</p>}
+    </section>}
     <div className="flex flex-wrap justify-end gap-3"><Link className={purchaseSecondary} href={`/dashboard/purchases/${order.id}`}>Back to order</Link>{reviewing && <button type="button" className={purchaseSecondary} onClick={() => setReviewing(false)}>Change quantities</button>}<button className={purchaseButton} disabled={!outstanding.length}>{reviewing ? 'Confirm Receipt' : 'Review Receipt'}</button></div>
   </form>;
 }
