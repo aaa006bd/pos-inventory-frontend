@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { emptyMovementFilters, getInventoryMovements, movementDelta, movementQuery, movementSourceLabel, movementSourceLink, movementTypes, stockStatuses, type InventoryMovement, type MovementFilters } from '@/lib/inventory-movements';
 import { getPurchaseCatalog } from '@/lib/purchases';
 import { useSalesResource } from '../../sales/orders/_components/use-sales-resource';
@@ -14,8 +15,18 @@ function Source({ row }: { row: InventoryMovement }) {
 const dateLabel = (date: string) => new Date(date).toLocaleString();
 
 export default function InventoryMovementsPage() {
-  const [draft, setDraft] = useState<MovementFilters>(emptyMovementFilters);
-  const [filters, setFilters] = useState<MovementFilters>(emptyMovementFilters);
+  return <Suspense fallback={<p role="status">Loading movements…</p>}><InventoryMovementsRoute /></Suspense>;
+}
+
+function InventoryMovementsRoute() {
+  const requestedProductId = useSearchParams().get('productId');
+  const productId = requestedProductId && /^[1-9]\d*$/.test(requestedProductId) && Number.isSafeInteger(Number(requestedProductId)) ? requestedProductId : '';
+  return <InventoryMovementsContent key={productId} initialProductId={productId} />;
+}
+
+function InventoryMovementsContent({ initialProductId }: { initialProductId: string }) {
+  const [draft, setDraft] = useState<MovementFilters>(() => ({ ...emptyMovementFilters, productId: initialProductId }));
+  const [filters, setFilters] = useState<MovementFilters>(() => ({ ...emptyMovementFilters, productId: initialProductId }));
   const [page, setPage] = useState(1);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<InventoryMovement | null>(null);

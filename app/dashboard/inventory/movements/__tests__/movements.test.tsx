@@ -4,11 +4,14 @@ import * as movements from '@/lib/inventory-movements';
 import { getPurchaseCatalog } from '@/lib/purchases';
 import InventoryMovementsPage from '../page';
 
+let mockSearchParams = new URLSearchParams();
+jest.mock('next/navigation', () => ({ useSearchParams: () => mockSearchParams }));
 jest.mock('@/lib/auth-context', () => ({ useAuth: () => ({ token: 'test' }) }));
 jest.mock('@/lib/purchases', () => ({ getPurchaseCatalog: jest.fn() }));
 jest.mock('@/lib/inventory-movements', () => ({ ...jest.requireActual('@/lib/inventory-movements'), getInventoryMovements: jest.fn() }));
 const row: movements.InventoryMovement = { id: 1, baseUnit: 'piece', inventoryItemId: 7, productId: 4, productName: 'Tiller', barcode: 'UNIT-7', type: 'SALE', quantityDelta: -1, fromStatus: 'in_stock', toStatus: 'sold', referenceType: 'SALES_RECORD', referenceId: 3, sourceDocumentNumber: 'SALE-3', unitCost: 50, reason: null, notes: null, actorId: 1, actorName: 'Admin', occurredAt: '2026-09-19T12:00:00Z' };
 beforeEach(() => {
+  mockSearchParams = new URLSearchParams();
   (getPurchaseCatalog as jest.Mock).mockResolvedValue([]);
   HTMLDialogElement.prototype.showModal = jest.fn(function (this: HTMLDialogElement) { this.setAttribute('open', ''); });
   HTMLDialogElement.prototype.close = jest.fn(function (this: HTMLDialogElement) { this.removeAttribute('open'); });
@@ -24,6 +27,26 @@ it('shows mixed units separately and uses product history when no inventory unit
   fireEvent.click(screen.getByRole('button', { name: 'View movement 1' }));
   fireEvent.click(screen.getByRole('button', { name: 'View this product’s history' }));
   await waitFor(() => expect(movements.getInventoryMovements).toHaveBeenLastCalledWith({ ...movements.emptyMovementFilters, productId: '4' }, 1));
+});
+
+it('starts with a valid product from the URL and keeps the normal filter controls', async () => {
+  mockSearchParams = new URLSearchParams('productId=4');
+  (getPurchaseCatalog as jest.Mock).mockResolvedValue([{ id: 4, name: 'Tiller' }]);
+  render(<InventoryMovementsPage />);
+
+  await waitFor(() => expect(movements.getInventoryMovements).toHaveBeenCalledWith({ ...movements.emptyMovementFilters, productId: '4' }, 1));
+  expect(await screen.findByRole('combobox', { name: 'Product' })).toHaveValue('4');
+  fireEvent.change(screen.getByLabelText('Movement type'), { target: { value: 'ADJUSTMENT' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
+  await waitFor(() => expect(movements.getInventoryMovements).toHaveBeenLastCalledWith({ ...movements.emptyMovementFilters, productId: '4', type: 'ADJUSTMENT' }, 1));
+  fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+  await waitFor(() => expect(movements.getInventoryMovements).toHaveBeenLastCalledWith(movements.emptyMovementFilters, 1));
+});
+
+it('ignores invalid product IDs in the URL', async () => {
+  mockSearchParams = new URLSearchParams('productId=-4');
+  render(<InventoryMovementsPage />);
+  await waitFor(() => expect(movements.getInventoryMovements).toHaveBeenCalledWith(movements.emptyMovementFilters, 1));
 });
 
 it('shows source links and filtered totals and opens item history', async () => {

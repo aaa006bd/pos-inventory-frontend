@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo } from 'react';
-import Link from 'next/link';
 import { InventoryBadge, InventoryCountBadge, InventoryRefreshButton, inventoryPage, inventoryStatCard } from './InventoryTheme';
 import { InventoryItemWithProduct } from '@/lib/api';
 
@@ -155,8 +154,8 @@ export default function InventoryListTab({ inventory, onRefresh, total, statusFi
                       className={`transition-colors hover:bg-sky-50/40 dark:hover:bg-sky-900/10 ${idx !== inventory.length - 1 ? 'border-b border-slate-100 dark:border-slate-700/50' : ''}`}
                     >
                       <td className="px-6 py-4 font-mono text-xs text-slate-500 dark:text-slate-400">{item.barcode}</td>
-                      <td className="px-6 py-4 text-sm font-semibold text-slate-900 dark:text-slate-100"><Link className="text-sky-700 hover:underline dark:text-sky-400" href={`/dashboard/inventory/balances/${item.productId}`}>{item.product?.name ?? `Product #${item.productId}`}</Link></td>
-                      <td className="px-6 py-4 font-mono text-xs text-slate-600 dark:text-slate-300">{item.lotNumber ? <Link className="text-sky-700 hover:underline dark:text-sky-400" href={`/dashboard/inventory/list?lotNumber=${encodeURIComponent(item.lotNumber)}`}>{item.lotNumber}</Link> : '—'}</td>
+                      <td className="px-6 py-4 text-sm font-semibold text-slate-900 dark:text-slate-100"><a className="text-sky-700 hover:underline dark:text-sky-400" href={`/dashboard/inventory/balances/${item.productId}`}>{item.product?.name ?? `Product #${item.productId}`}</a></td>
+                      <td className="px-6 py-4 font-mono text-xs text-slate-600 dark:text-slate-300">{item.lotNumber ? <a className="text-sky-700 hover:underline dark:text-sky-400" href={`/dashboard/inventory/list?lotNumber=${encodeURIComponent(item.lotNumber)}`}>{item.lotNumber}</a> : '—'}</td>
                       <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{item.supplier?.name ?? <span className="text-slate-300 dark:text-slate-600">—</span>}</td>
                       <td className="px-6 py-4"><StatusBadge status={item.status} /></td>
                       <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">

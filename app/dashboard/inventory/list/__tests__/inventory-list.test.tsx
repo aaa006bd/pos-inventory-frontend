@@ -3,10 +3,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { realApi } from '@/lib/api';
 import InventoryListPage from '../page';
 
-jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams() }));
+let queryString = '';
+jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(queryString) }));
 jest.mock('@/lib/auth-context', () => ({ useAuth: () => ({ token: 'test-token' }) }));
 
 beforeEach(() => {
+  queryString = '';
   jest.spyOn(realApi, 'getInventory').mockResolvedValue({
     items: [], total: 0, page: 1, limit: 20, pageCount: 1, hasNext: false,
   });
@@ -53,4 +55,22 @@ it('jumps to a valid page without accepting out-of-range input', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Go' }));
   await waitFor(() => expect(realApi.getInventory).toHaveBeenCalledWith(expect.objectContaining({ page: 3, limit: 20 })));
   expect(pageField).toHaveValue('3');
+});
+
+it('opens the serialized list scoped to a product while keeping list controls usable', async () => {
+  queryString = 'productId=42';
+  render(<InventoryListPage />);
+  expect(await screen.findByText(/Serialized units for product/)).toBeInTheDocument();
+  await waitFor(() => expect(realApi.getInventory).toHaveBeenCalledWith(expect.objectContaining({ productId: 42, page: 1, limit: 20 })));
+  fireEvent.click(screen.getByRole('button', { name: 'Sold' }));
+  await waitFor(() => expect(realApi.getInventory).toHaveBeenLastCalledWith(expect.objectContaining({ productId: 42, status: 'sold' })));
+  expect(screen.getByRole('link', { name: 'Show all serialized units' })).toHaveAttribute('href', '/dashboard/inventory/list');
+});
+
+it('ignores invalid product IDs instead of sending them to the API', async () => {
+  queryString = 'productId=-2';
+  render(<InventoryListPage />);
+  await waitFor(() => expect(realApi.getInventory).toHaveBeenCalled());
+  expect(realApi.getInventory).toHaveBeenCalledWith(expect.not.objectContaining({ productId: expect.anything() }));
+  expect(screen.queryByText('Serialized units for product')).not.toBeInTheDocument();
 });
