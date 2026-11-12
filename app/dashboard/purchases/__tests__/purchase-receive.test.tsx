@@ -1,11 +1,13 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PurchaseReceive from '../_components/purchase-receive';
+import * as purchases from '@/lib/purchases';
 import { purchasesApi, type PurchaseOrder } from '@/lib/purchases';
 import { ApiError } from '@/lib/api';
 import { readReceiptAttempt, createReceiptAttempt, RECEIPT_RETRY_WINDOW_MS } from '@/lib/purchase-receipt-attempt';
 
 jest.mock('@/lib/auth-context', () => ({ useAuth: () => ({ token: 'test-token' }) }));
+jest.mock('@/lib/purchases', () => ({ ...jest.requireActual('@/lib/purchases'), getPurchaseCatalog: jest.fn() }));
 
 const order: PurchaseOrder = {
   id: 25, tenantId: 3, orderNumber: 'PO-TEST-25', supplierId: 7, supplier: { id: 7, name: 'Test supplier' },
@@ -17,6 +19,7 @@ const order: PurchaseOrder = {
 describe('purchase receiving', () => {
   beforeEach(() => {
     sessionStorage.clear();
+    jest.mocked(purchases.getPurchaseCatalog).mockResolvedValue([]);
     Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: () => '00000000-0000-4000-8000-000000000001' });
     jest.spyOn(purchasesApi, 'get').mockResolvedValue(order);
   });
@@ -40,6 +43,21 @@ describe('purchase receiving', () => {
     expect(screen.getByRole('link', { name: 'Print lot barcodes' })).toHaveAttribute('href', '/dashboard/inventory/barcode?lotNumber=LOT%2F25+A');
     expect(screen.queryByRole('button', { name: 'Confirm Receipt' })).not.toBeInTheDocument();
     expect(readReceiptAttempt(order)).toBeNull();
+  });
+
+  it('reviews order cost separately from the current product selling price', async () => {
+    jest.spyOn(purchasesApi, 'receive').mockResolvedValue({ receiptId: 55, order, receipts: [] });
+    const catalog = jest.mocked(purchases.getPurchaseCatalog).mockResolvedValue([{ id: 42, name: 'Cotton Shirt', basePrice: 200 } as never]);
+    render(<PurchaseReceive id={25} />);
+    fireEvent.change(await screen.findByLabelText('Receive Cotton Shirt'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Review Receipt' }));
+
+    expect(await screen.findByText('৳200.00 / piece')).toBeInTheDocument();
+    expect(screen.getByText('৳125.50 / piece')).toBeInTheDocument();
+    expect(screen.getByText('৳251.00')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Manage product price' })).toHaveAttribute('href', '/dashboard/products');
+    expect(screen.getByRole('button', { name: 'Confirm Receipt' })).toBeEnabled();
+    expect(catalog).toHaveBeenCalled();
   });
 
   it('retries a network failure with the same key and payload after remounting a completed order', async () => {
