@@ -2,23 +2,26 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { canReceive, purchasesApi, remainingQuantity, formatAmount, formatPurchaseDate, purchaseError, uncertainMutation, type PurchaseOrder } from '@/lib/purchases';
+import { canReceive, purchasesApi, purchaseLotDetailHref, remainingQuantity, formatAmount, formatPurchaseDate, purchaseError, uncertainMutation, type PurchaseOrder } from '@/lib/purchases';
 import { usePurchaseResource } from './use-purchase-resource';
 import PurchaseHistory from './purchase-history';
 import { PurchaseShell, PurchaseBadge, PurchaseError, PurchaseLoading, purchaseButton, purchaseSecondary, purchaseInput, purchaseCard } from './purchase-ui';
 import { formatQuantity } from '@/lib/product-quantity';
 
-export default function PurchaseDetail({ id }: { id: number }) {
+export default function PurchaseDetail({ id, initialTab = 'items' }: { id: number; initialTab?: 'items' | 'receipts' }) {
   const load = useCallback(() => purchasesApi.get(id), [id]);
   const resource = usePurchaseResource(load);
-  return resource.data ? <PurchaseDetailContent order={resource.data} reload={resource.reload} /> : <PurchaseShell title="Purchase Order">{resource.loading ? <PurchaseLoading /> : <PurchaseError message={resource.error ?? 'Order unavailable.'} retry={resource.reload} />}</PurchaseShell>;
+  return resource.data ? <PurchaseDetailContent order={resource.data} reload={resource.reload} initialTab={initialTab} /> : <PurchaseShell title="Purchase Order">{resource.loading ? <PurchaseLoading /> : <PurchaseError message={resource.error ?? 'Order unavailable.'} retry={resource.reload} />}</PurchaseShell>;
 }
 
-function PurchaseDetailContent({ order, reload }: { order: PurchaseOrder; reload: () => void }) {
-  const [tab, setTab] = useState<'items' | 'receipts'>('items');
+function PurchaseDetailContent({ order, reload, initialTab }: { order: PurchaseOrder; reload: () => void; initialTab: 'items' | 'receipts' }) {
+  const [tab, setTab] = useState<'items' | 'receipts'>(initialTab);
+  const loadLotPreview = useCallback(() => purchasesApi.receipts(order.id, 1, 20), [order.id]);
+  const lotPreview = usePurchaseResource(loadLotPreview);
   const [action, setAction] = useState<'confirm' | 'cancel' | null>(null);
   const [notice, setNotice] = useState('');
   const [reviewRequired, setReviewRequired] = useState(false);
+  const receivedLots = lotPreview.data?.items.flatMap(receipt => receipt.lines.map(line => ({ ...line, receiptId: receipt.id }))) ?? [];
   return <PurchaseShell title={order.orderNumber} description={order.supplier.name} order={{ id: order.id, label: order.orderNumber }} actions={<>
     {reviewRequired ? <button className={purchaseSecondary} onClick={reload}>Reload order</button> : <>
       {order.status === 'DRAFT' && <><Link className={purchaseSecondary} href={`/dashboard/purchases/${order.id}/edit`}>Edit Draft</Link><button className={purchaseButton} onClick={() => setAction('confirm')}>Confirm Order</button></>}
@@ -45,11 +48,15 @@ function PurchaseDetailContent({ order, reload }: { order: PurchaseOrder; reload
     <section role="tabpanel" id={`purchase-panel-${tab}`} aria-labelledby={`purchase-tab-${tab}`} tabIndex={0}>
     {tab === 'receipts' ? <PurchaseHistory key={order.id} order={order} /> : <section className={purchaseCard} aria-label="Order items">
       <div className="mb-4 flex flex-wrap justify-between gap-2"><h2 className="font-semibold">Items</h2><p className="text-sm text-slate-500">{order.lines.filter(line => remainingQuantity(line) === 0).length} of {order.lines.length} product lines fully received</p></div>
-      <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b border-slate-200 text-xs uppercase text-slate-500 dark:border-slate-700"><tr>{['Product', 'Ordered', 'Received', 'Remaining', 'Unit cost', 'Line total'].map(label => <th key={label} className="px-3 py-3">{label}</th>)}</tr></thead>
-        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{order.lines.map(line => <tr key={line.id}>
+      <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b border-slate-200 text-xs uppercase text-slate-500 dark:border-slate-700"><tr>{['Product', 'Ordered', 'Received', 'Remaining', 'Received lots', 'Unit cost', 'Line total'].map(label => <th key={label} className="px-3 py-3">{label}</th>)}</tr></thead>
+        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{order.lines.map(line => { const lineLots = receivedLots.filter(lot => lot.purchaseOrderLineId === line.id); return <tr key={line.id}>
           <td className="px-3 py-4"><p className="font-medium">{line.product.name}</p>{line.product.sku && <p className="text-xs text-slate-500">{line.product.sku}</p>}{line.notes && <p className="mt-1 max-w-xs whitespace-pre-wrap break-words text-xs text-slate-500">{line.notes}</p>}</td>
-          <td className="px-3 py-4">{formatQuantity(line.quantity, line.product.baseUnit)}</td><td className="px-3 py-4">{formatQuantity(line.receivedQuantity, line.product.baseUnit)}</td><td className="px-3 py-4">{formatQuantity(remainingQuantity(line), line.product.baseUnit)}</td><td className="px-3 py-4 tabular-nums">{formatAmount(line.unitCost)} / {line.product.baseUnit}</td><td className="px-3 py-4 tabular-nums">{formatAmount(line.lineTotal)}</td>
-        </tr>)}</tbody></table></div>
+          <td className="px-3 py-4">{formatQuantity(line.quantity, line.product.baseUnit)}</td><td className="px-3 py-4">{formatQuantity(line.receivedQuantity, line.product.baseUnit)}</td><td className="px-3 py-4">{formatQuantity(remainingQuantity(line), line.product.baseUnit)}</td>
+          <td className="px-3 py-4">{lotPreview.loading ? <span className="text-slate-500">Loading…</span> : lineLots.length ? <div className="space-y-1">{lineLots.map(receivedLine => { const href = purchaseLotDetailHref(receivedLine.lotNumber); return <div key={`${receivedLine.receiptId}-${receivedLine.id}`} className="whitespace-nowrap text-xs">{href ? <Link href={href} className="font-semibold text-sky-700 underline-offset-4 hover:underline dark:text-sky-400">{receivedLine.lotNumber}</Link> : <span>{receivedLine.lotNumber}</span>} <span className="text-slate-500">({formatQuantity(receivedLine.receivedQuantity, line.product.baseUnit)})</span></div>; })}</div> : Number(line.receivedQuantity) > 0 && lotPreview.data?.hasNext ? <button type="button" className="text-xs text-sky-700 hover:underline dark:text-sky-400" onClick={() => setTab('receipts')}>See Receipt History</button> : <span className="text-slate-400">—</span>}</td>
+          <td className="px-3 py-4 tabular-nums">{formatAmount(line.unitCost)} / {line.product.baseUnit}</td><td className="px-3 py-4 tabular-nums">{formatAmount(line.lineTotal)}</td>
+        </tr>; })}</tbody></table></div>
+      {lotPreview.error && <div className="mt-4"><PurchaseError message={`Received lots: ${lotPreview.error}`} retry={lotPreview.reload} /></div>}
+      {lotPreview.data?.hasNext && <p className="mt-4 text-sm text-slate-500">Showing lots from the first {lotPreview.data.items.length} receipts. <button type="button" className="font-semibold text-sky-700 underline-offset-4 hover:underline dark:text-sky-400" onClick={() => setTab('receipts')}>See all lots in Receipt History</button></p>}
       <p className="mt-4 text-sm font-medium">{order.status === 'CANCELLED' ? 'This order is cancelled. No further stock can be received.' : `${order.lines.filter(line => remainingQuantity(line) > 0).length} product lines outstanding`}</p>
     </section>}
     </section>

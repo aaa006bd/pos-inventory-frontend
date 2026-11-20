@@ -30,6 +30,7 @@ const salesItems = [
 
 const purchasingItems = [
   { href: '/dashboard/purchases', label: 'Purchase Orders', icon: 'inventory' },
+  { href: '/dashboard/purchases/receipts', label: 'Purchase Receipts', icon: 'receive' },
   { href: '/dashboard/suppliers', label: 'Suppliers', icon: 'folder' },
   { href: '/dashboard/inventory/receive', label: 'Manual Stock Receipt', icon: 'receive' },
 ];
@@ -100,6 +101,7 @@ const icons: Record<string, ReactNode> = {
 
 function isItemActive(pathname: string, href: string) {
   if (href === '/dashboard') return pathname === href;
+  if (href === '/dashboard/purchases' && pathname.startsWith('/dashboard/purchases/receipts')) return false;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

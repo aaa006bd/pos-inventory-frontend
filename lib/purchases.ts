@@ -88,6 +88,71 @@ export interface PurchaseReceiptList {
   hasNext: boolean;
 }
 
+export type PurchaseReceiptSource = 'PURCHASE_ORDER' | 'MANUAL_STOCK';
+
+export interface PurchaseReceiptFeedItem {
+  id: string;
+  receiptDate: string;
+  sourceType: PurchaseReceiptSource;
+  sourceId: number;
+  sourceDocumentNumber: string;
+  supplierId: number;
+  supplierName: string;
+  productId: number;
+  productName: string;
+  trackingMode: ProductTracking['trackingMode'];
+  baseUnit: ProductTracking['baseUnit'];
+  quantityReceived: number;
+  unitCost: number | null;
+  lineTotal: number;
+  lotNumber: string;
+  purchaseOrderId: number | null;
+  receiptId: number | null;
+}
+
+export interface PurchaseReceiptFeedQuery {
+  page: number;
+  limit: number;
+  sourceType?: PurchaseReceiptSource;
+  supplierId?: number;
+  from?: string;
+  to?: string;
+  search?: string;
+}
+
+export interface PurchaseReceiptFeed {
+  items: PurchaseReceiptFeedItem[];
+  total: number;
+  page: number;
+  limit: number;
+  pageCount: number;
+  hasNext: boolean;
+}
+
+export interface PurchaseLotDetail {
+  id: number;
+  lotNumber: string;
+  productId: number;
+  product: { id: number; name: string; sku?: string | null } & ProductTracking;
+  supplierId: number;
+  supplier: { id: number; name: string };
+  quantityReceived: number;
+  unitCost: number | null;
+  totalCost: number;
+  notes: string | null;
+  journalEntryId: number | null;
+  purchaseOrderLineId: number | null;
+  receivedAt: string;
+  sourceDocument: {
+    type: PurchaseReceiptSource;
+    id: number;
+    number: string;
+    purchaseOrderId: number | null;
+    receiptId: number | null;
+  } | null;
+  itemCount: number | null;
+}
+
 export interface PurchaseListQuery {
   page: number;
   limit: number;
@@ -114,8 +179,20 @@ export const purchasesApi = {
   cancel: (id: number, reason: string) => api.post<PurchaseOrder>(`/purchases/orders/${id}/cancel`, { reason }),
   receive: (id: number, receipt: PurchaseReceiptInput, idempotencyKey: string) => api.post<PurchaseReceiptResult>(`/purchases/orders/${id}/receive`, receipt, { headers: { 'Idempotency-Key': idempotencyKey } }),
   receipts: (id: number, page = 1, limit = 20) => api.get<PurchaseReceiptList>(`/purchases/orders/${id}/receipts`, { page, limit }),
+  receiptFeed: (query: PurchaseReceiptFeedQuery) => api.get<PurchaseReceiptFeed>('/purchases/receipts', { ...query }),
+  lotDetail: (lotNumber: string) => api.get<PurchaseLotDetail>(`/inventory/lots/${encodeURIComponent(lotNumber)}`),
   printReceipt: (orderId: number, receiptId: number) => api.getText(`/purchases/orders/${orderId}/receipts/${receiptId}/print`),
 };
+
+export function purchaseLotDetailHref(lotNumber: string): string | null {
+  if (!lotNumber) return null;
+  return `/dashboard/inventory/lots?${new URLSearchParams({ lotNumber })}`;
+}
+
+export function purchaseReceiptSourceHref(receipt: Pick<PurchaseReceiptFeedItem, 'sourceType' | 'purchaseOrderId' | 'lotNumber'>): string | null {
+  if (receipt.sourceType === 'PURCHASE_ORDER' && receipt.purchaseOrderId) return `/dashboard/purchases/${receipt.purchaseOrderId}?tab=receipts`;
+  return purchaseLotDetailHref(receipt.lotNumber);
+}
 
 export function canReceive(order: PurchaseOrder) {
   return order.status === 'CONFIRMED' || order.status === 'PARTIALLY_RECEIVED';
