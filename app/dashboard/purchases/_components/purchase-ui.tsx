@@ -7,18 +7,19 @@ export const purchaseButton = 'inline-flex items-center justify-center rounded-x
 export const purchaseSecondary = 'inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800';
 export const purchaseCard = 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900';
 
-export function PurchaseShell({ title, description, actions, children, order }: {
+export function PurchaseShell({ title, description, actions, children, order, section = 'orders' }: {
   title: string;
   description?: string;
   actions?: ReactNode;
   children: ReactNode;
   order?: { id: number; label: string };
+  section?: 'orders' | 'receipts';
 }) {
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-8">
       <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
         <span>Purchasing</span><span aria-hidden="true">/</span>
-        <Link href="/dashboard/purchases" className="hover:text-sky-600">Purchase Orders</Link>
+        <Link href={section === 'receipts' ? '/dashboard/purchases/receipts' : '/dashboard/purchases'} className="hover:text-sky-600">{section === 'receipts' ? 'Purchase Receipts' : 'Purchase Orders'}</Link>
         {order && <><span aria-hidden="true">/</span><Link href={`/dashboard/purchases/${order.id}`} className="hover:text-sky-600">{order.label}</Link></>}
       </nav>
       <header className="flex flex-wrap items-start justify-between gap-4">

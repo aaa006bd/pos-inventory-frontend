@@ -21,11 +21,21 @@ describe('purchase receipt history', () => {
     expect(await screen.findByText('Receipt #55')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Print receipt' })).toBeInTheDocument();
     expect(screen.getByText('PURCHASE-REF-350')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'LOT/25 A' })).toHaveAttribute('href', '/dashboard/inventory/lots?lotNumber=LOT%2F25+A');
     expect(screen.getByRole('link', { name: 'View stock' })).toHaveAttribute('href', '/dashboard/inventory/list?lotNumber=LOT%2F25+A');
     fireEvent.click(screen.getByRole('button', { name: 'Next receipts' }));
     expect(await screen.findByText('Receipt #54')).toBeInTheDocument();
     expect(receipts).toHaveBeenLastCalledWith(25, 2);
     expect(screen.getByRole('button', { name: 'Next receipts' })).toBeDisabled();
+  });
+
+  it('links quantity lots to receipt details and opens product-level stock separately', async () => {
+    jest.spyOn(purchasesApi, 'receipts').mockResolvedValue(history);
+    render(<PurchaseHistory order={{ ...order, lines: [{ ...order.lines[0], product: { ...order.lines[0].product, trackingMode: 'QUANTITY', baseUnit: 'kg', quantityPrecision: 2 } }] }} />);
+    expect(await screen.findByText('LOT/25 A')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'LOT/25 A' })).toHaveAttribute('href', '/dashboard/inventory/lots?lotNumber=LOT%2F25+A');
+    expect(screen.getByRole('link', { name: 'View stock' })).toHaveAttribute('href', '/dashboard/inventory/balances/42');
+    expect(screen.queryByRole('link', { name: 'Print barcodes' })).not.toBeInTheDocument();
   });
 
   it('offers retry after a failed history request, then shows the empty state', async () => {

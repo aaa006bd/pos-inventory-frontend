@@ -16,7 +16,7 @@ export default function PurchaseOrdersPage() {
     event.preventDefault();
     setQuery(previous => ({ ...previous, page: 1, orderNumber: search.trim() || undefined }));
   };
-  return <PurchaseShell title="Purchase Orders" description="Plan supplier orders and track deliveries into stock." actions={<Link href="/dashboard/purchases/new" className={purchaseButton}>+ New Order</Link>}>
+  return <PurchaseShell title="Purchase Orders" description="Plan supplier orders and track deliveries into stock." actions={<><Link href="/dashboard/purchases/receipts" className={purchaseSecondary}>View receipts</Link><Link href="/dashboard/purchases/new" className={purchaseButton}>+ New Order</Link></>}>
     <form onSubmit={applySearch} className={`${purchaseCard} grid gap-3 sm:grid-cols-2 lg:grid-cols-4`}>
       <label className="space-y-1 text-sm">Order number<input className={purchaseInput} value={search} onChange={event => setSearch(event.target.value)} placeholder="Search order number…" /></label>
       <label className="space-y-1 text-sm">Status<select className={purchaseInput} value={query.status ?? ''} onChange={event => setQuery(previous => ({ ...previous, page: 1, status: (event.target.value || undefined) as PurchaseStatus | undefined }))}>

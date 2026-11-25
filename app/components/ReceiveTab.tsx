@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { realApi } from '@/lib/api';
 import { Product, Supplier, type ReceiveBatchInput } from '@/lib/api';
 import { validProductQuantity, formatQuantity } from '@/lib/product-quantity';
@@ -153,6 +154,8 @@ export default function ReceiveTab({ products, showMessage }: ReceiveTabProps) {
   };
 
   const selectedProduct = products.find(p => p.id === Number(form.productId));
+  const receivedProduct = products.find(p => p.id === operation.result?.lot.productId);
+  const isQuantityReceipt = operation.result && (receivedProduct?.trackingMode === 'QUANTITY' || (!receivedProduct && operation.result.items.length === 0));
   const selectedSupplier = suppliers.find(s => s.id === Number(form.supplierId));
   const isReady = !!form.productId && !!form.quantity && !!form.supplierId && !!form.unitCost && operation.ready && !operation.busy && !operation.pending;
 
@@ -299,7 +302,7 @@ export default function ReceiveTab({ products, showMessage }: ReceiveTabProps) {
             </button>
             {operation.error && <div role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{operation.error}</div>}
             {operation.pending && <button type="button" className="w-full rounded-xl border p-3 text-sm font-semibold" disabled={operation.busy} onClick={operation.retry}>Recover receipt result</button>}
-            {operation.result && <div role="status" className="space-y-2 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900"><p>Received {formatQuantity(operation.result.lot.quantityReceived, selectedProduct?.baseUnit ?? 'piece')} in lot <strong>{operation.result.lot.lotNumber}</strong>.</p><p>{operation.result.items.length ? `${operation.result.items.length} barcode units created.` : 'Quantity balance updated; no barcode units were created.'}</p><button type="button" className="underline" onClick={() => { operation.reset(); setForm({ productId: '', quantity: '', supplierId: '', unitCost: '', notes: '' }); }}>Receive another batch</button></div>}
+            {operation.result && <div role="status" className="space-y-2 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900"><p>Received {formatQuantity(operation.result.lot.quantityReceived, receivedProduct?.baseUnit ?? selectedProduct?.baseUnit ?? 'piece')} in lot <Link className="font-semibold underline" href={{ pathname: '/dashboard/inventory/lots', query: { lotNumber: operation.result.lot.lotNumber } }}>{operation.result.lot.lotNumber}</Link>.</p><p>{operation.result.items.length ? `${operation.result.items.length} barcode units created.` : 'Quantity balance updated; no barcode units were created.'}</p>{isQuantityReceipt && <Link className="inline-block underline" href={`/dashboard/inventory/balances/${operation.result.lot.productId}`}>View product stock</Link>}<Link className="block underline" href="/dashboard/purchases/receipts">All purchase receipts</Link><button type="button" className="block underline" onClick={() => { operation.reset(); setForm({ productId: '', quantity: '', supplierId: '', unitCost: '', notes: '' }); }}>Receive another batch</button></div>}
           </form>
         </div>
       </div>

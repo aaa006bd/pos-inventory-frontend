@@ -1,5 +1,5 @@
 import { api, ApiError } from '../api';
-import { purchasesApi, validateDraft, validateReceipt, purchaseProgress, uncertainMutation, getPurchaseCatalog, type PurchaseOrder } from '../purchases';
+import { purchasesApi, purchaseLotDetailHref, purchaseReceiptSourceHref, validateDraft, validateReceipt, purchaseProgress, uncertainMutation, getPurchaseCatalog, type PurchaseOrder } from '../purchases';
 
 export const orderFixture: PurchaseOrder = {
   id: 25, tenantId: 3, orderNumber: 'PO-TEST-25', supplierId: 7, supplier: { id: 7, name: 'Test supplier' },
@@ -54,6 +54,22 @@ describe('purchase workflow rules', () => {
     const getText = jest.spyOn(api, 'getText').mockResolvedValue('<html>Receipt</html>');
     await expect(purchasesApi.printReceipt(25, 55)).resolves.toBe('<html>Receipt</html>');
     expect(getText).toHaveBeenCalledWith('/purchases/orders/25/receipts/55/print');
+  });
+
+  it('uses the paginated receipt feed and encoded lot detail endpoints', async () => {
+    const get = jest.spyOn(api, 'get').mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, pageCount: 0, hasNext: false });
+    const query = { page: 2, limit: 20, sourceType: 'MANUAL_STOCK' as const, supplierId: 7, from: '2026-10-01', to: '2026-10-31', search: 'flour' };
+    await purchasesApi.receiptFeed(query);
+    await purchasesApi.lotDetail('LOT/25 A');
+    expect(get).toHaveBeenNthCalledWith(1, '/purchases/receipts', query);
+    expect(get).toHaveBeenNthCalledWith(2, '/inventory/lots/LOT%2F25%20A');
+  });
+
+  it('links each receipt to its real source and safely encodes lot numbers', () => {
+    expect(purchaseLotDetailHref('LOT/25 A')).toBe('/dashboard/inventory/lots?lotNumber=LOT%2F25+A');
+    expect(purchaseLotDetailHref('')).toBeNull();
+    expect(purchaseReceiptSourceHref({ sourceType: 'PURCHASE_ORDER', purchaseOrderId: 25, lotNumber: 'LOT-1' })).toBe('/dashboard/purchases/25?tab=receipts');
+    expect(purchaseReceiptSourceHref({ sourceType: 'MANUAL_STOCK', purchaseOrderId: null, lotNumber: 'LOT/25 A' })).toBe('/dashboard/inventory/lots?lotNumber=LOT%2F25+A');
   });
 
   it('loads products beyond the first response page', async () => {
